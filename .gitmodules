@@ -1,0 +1,6 @@
+[submodule "public/icons"]
+	path = public/icons
+	url = git@github.com:Yumeo0/warframe-icons.git
+[submodule "packages/wfm-api-client"]
+	path = packages/wfm-api-client
+	url = git@github.com:Yumeo0/wfm-api-client.git
