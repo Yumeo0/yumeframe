@@ -64,6 +64,9 @@ export function useData() {
 		let cancelled = false;
 
 		async function loadData() {
+			const normalizeStoreItemPath = (value: string) =>
+				value.replace("/StoreItems", "");
+
 			const results = await Promise.allSettled([
 				invoke<string>("fetch_warframe_manifest", { assets }),
 				invoke<string>("fetch_warframe_data", { assets }),
@@ -144,10 +147,16 @@ export function useData() {
 				const recipes: Record<string, RecipeData> = {};
 				const ducatValues: Record<string, number> = {};
 				for (const recipe of data.ExportRecipes as ExportRecipeEntry[]) {
-					recipes[recipe.resultType] = recipe;
+					const normalizedResultType = normalizeStoreItemPath(recipe.resultType);
+					recipes[normalizedResultType] = recipe;
 					if (typeof recipe.primeSellingPrice === "number") {
+						const normalizedUniqueName = normalizeStoreItemPath(
+							recipe.uniqueName,
+						);
 						ducatValues[recipe.uniqueName] = recipe.primeSellingPrice;
+						ducatValues[normalizedUniqueName] = recipe.primeSellingPrice;
 						ducatValues[recipe.resultType] = recipe.primeSellingPrice;
+						ducatValues[normalizedResultType] = recipe.primeSellingPrice;
 					}
 				}
 				setRecipeData(recipes);
@@ -175,10 +184,23 @@ export function useData() {
 			if (resourceResult.status === "fulfilled") {
 				const data: ExportResourcesWrapper = JSON.parse(resourceResult.value);
 				const names: Record<string, string> = {};
+				const resourceDucatValues: Record<string, number> = {};
 				for (const resource of data.ExportResources) {
 					names[resource.uniqueName] = resource.name;
+					if (typeof resource.primeSellingPrice === "number") {
+						const normalizedUniqueName = normalizeStoreItemPath(
+							resource.uniqueName,
+						);
+						resourceDucatValues[resource.uniqueName] = resource.primeSellingPrice;
+						resourceDucatValues[normalizedUniqueName] =
+							resource.primeSellingPrice;
+					}
 				}
 				setResourceNames(names);
+				setRecipeDucatValues((previous) => ({
+					...previous,
+					...resourceDucatValues,
+				}));
 			} else {
 				console.error("Failed to load resource data:", resourceResult.reason);
 			}

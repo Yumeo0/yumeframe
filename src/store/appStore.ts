@@ -1,8 +1,19 @@
 import { Store } from "@tanstack/react-store";
 import type { FoundryFilter } from "@/components/app/FoundryPage";
-import type { OwnedCompanion, OwnedRelic, OwnedWeapon, Warframe } from "@/types";
+import type {
+	OwnedCompanion,
+	OwnedRelic,
+	OwnedWeapon,
+	RelicScanEntry,
+	Warframe,
+} from "@/types";
 
-export type AppTab = "foundry" | "mastery-helper" | "relic-planner" | "settings";
+export type AppTab =
+	| "foundry"
+	| "mastery-helper"
+	| "relic-planner"
+	| "relic-scanner"
+	| "settings";
 
 type Updater<T> = T | ((previous: T) => T);
 
@@ -27,6 +38,11 @@ export interface AppState {
 	visibleRewardNames: string[];
 	rewardPlatinumValues: Record<string, number>;
 	rewardPlatinumFetchedAt: Record<string, number>;
+	relicScannerEnabled: boolean;
+	relicOverlayEnabled: boolean;
+	relicScannerHotkey: string;
+	relicScannerStatus: "stopped" | "watching" | "error";
+	relicScans: RelicScanEntry[];
 }
 
 export const appStore = new Store<AppState>({
@@ -43,6 +59,11 @@ export const appStore = new Store<AppState>({
 	visibleRewardNames: [],
 	rewardPlatinumValues: {},
 	rewardPlatinumFetchedAt: {},
+	relicScannerEnabled: true,
+	relicOverlayEnabled: false,
+	relicScannerHotkey: "F12",
+	relicScannerStatus: "stopped",
+	relicScans: [],
 });
 
 function updateStoreSlice<Key extends keyof AppState>(
@@ -109,4 +130,26 @@ export function setAppRewardPlatinumFetchedAt(
 	value: Updater<Record<string, number>>,
 ) {
 	updateStoreSlice("rewardPlatinumFetchedAt", value);
+}
+
+export function setAppRelicScannerEnabled(value: Updater<boolean>) {
+	updateStoreSlice("relicScannerEnabled", value);
+}
+
+export function setAppRelicOverlayEnabled(value: Updater<boolean>) {
+	updateStoreSlice("relicOverlayEnabled", value);
+}
+
+export function setAppRelicScannerHotkey(value: Updater<string>) {
+	updateStoreSlice("relicScannerHotkey", value);
+}
+
+export function setAppRelicScannerStatus(
+	value: Updater<"stopped" | "watching" | "error">,
+) {
+	updateStoreSlice("relicScannerStatus", value);
+}
+
+export function setAppRelicScans(value: Updater<RelicScanEntry[]>) {
+	updateStoreSlice("relicScans", value);
 }

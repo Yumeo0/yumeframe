@@ -1,6 +1,11 @@
 import { Button } from "@/components/ui/button";
 
-type Tab = "foundry" | "mastery-helper" | "relic-planner" | "settings";
+type Tab =
+	| "foundry"
+	| "mastery-helper"
+	| "relic-planner"
+	| "relic-scanner"
+	| "settings";
 
 interface SidebarProps {
 	activeTab: Tab;
@@ -93,6 +98,27 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 						}}
 					/>
 					Relic Planner
+				</Button>
+				<Button
+					variant={activeTab === "relic-scanner" ? "default" : "ghost"}
+					className="w-full justify-start gap-2"
+					onClick={() => onTabChange("relic-scanner")}
+				>
+					<span
+						aria-hidden="true"
+						className={`h-6 w-6 shrink-0 ${activeTab === "relic-scanner" ? "bg-primary-foreground" : "bg-foreground"}`}
+						style={{
+							maskImage: 'url("/icons/icon_archwing.svg")',
+							WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
+							maskRepeat: "no-repeat",
+							WebkitMaskRepeat: "no-repeat",
+							maskPosition: "center",
+							WebkitMaskPosition: "center",
+							maskSize: "contain",
+							WebkitMaskSize: "contain",
+						}}
+					/>
+					Relic Scanner
 				</Button>
 				</div>
 				<Button

@@ -1,4 +1,5 @@
 mod warframe_api;
+mod relic_scanner;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -22,7 +23,12 @@ pub fn run() {
             warframe_api::fetch_recipe_data,
             warframe_api::fetch_resource_data,
             warframe_api::fetch_companion_data,
-            warframe_api::fetch_relic_data
+            warframe_api::fetch_relic_data,
+            relic_scanner::start_relic_scanner,
+            relic_scanner::stop_relic_scanner,
+            relic_scanner::trigger_relic_scan,
+            relic_scanner::trigger_relic_scan_from_image,
+            relic_scanner::set_relic_overlay_enabled
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

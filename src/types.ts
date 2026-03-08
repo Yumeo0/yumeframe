@@ -530,6 +530,7 @@ export interface Resource {
 	name: string;
 	description: string;
 	codexSecret: boolean;
+	primeSellingPrice?: number;
 	parentName?: string;
 	excludeFromCodex?: boolean;
 	showInInventory?: boolean;
@@ -585,6 +586,34 @@ export interface OwnedRelic {
 	expectedPlatinum: number;
 	isPlatinumReady: boolean;
 	relicRewards: OwnedRelicReward[];
+}
+
+export type RelicScanTriggerSource = "log" | "hotkey" | "manual" | "image-test";
+
+export type RelicScanStatus =
+	| "triggered"
+	| "resolved"
+	| "no-data"
+	| "error";
+
+export interface RelicScanRewardValue {
+	rewardName: string;
+	displayName: string;
+	platinum: number;
+	ducats: number;
+	confidence: number;
+	priceSource: "daily-snapshot" | "none";
+	ducatSource: "recipe" | "none";
+}
+
+export interface RelicScanEntry {
+	id: string;
+	triggeredAt: number;
+	source: RelicScanTriggerSource;
+	status: RelicScanStatus;
+	rewards: RelicScanRewardValue[];
+	rawCandidates: string[];
+	error?: string;
 }
 
 // ============================================
