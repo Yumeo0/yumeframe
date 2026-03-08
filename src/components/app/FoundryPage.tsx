@@ -1,9 +1,10 @@
+import { useStore } from "@tanstack/react-store";
 import { Loader2, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { OwnedCompanion, OwnedWeapon, Warframe } from "@/types";
+import { appStore, setAppFoundryFilter } from "@/store/appStore";
 
 export type FoundryFilter =
 	| "warframes"
@@ -15,13 +16,7 @@ export type FoundryFilter =
 	| "companions";
 
 interface FoundryPageProps {
-	foundryFilter: FoundryFilter;
-	onFilterChange: (filter: FoundryFilter) => void;
-	loading: boolean;
 	error: string;
-	warframes: Warframe[];
-	weapons: OwnedWeapon[];
-	companions: OwnedCompanion[];
 	onRefresh: () => void;
 }
 
@@ -39,6 +34,7 @@ interface CollectionItem {
 	displayName: string;
 	xp: number;
 	isWeapon: boolean;
+	isSubsumed?: boolean;
 	maxLevel: number;
 	imageUrl: string;
 	favorite: boolean;
@@ -71,7 +67,7 @@ function CollectionSection({
 	return (
 		<div>
 			{items.length > 0 ? (
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 pt-1">
+				<div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
 					{items.map((item) =>
 						(() => {
 							const mastered = isItemMastered(item);
@@ -92,41 +88,71 @@ function CollectionSection({
 													{item.displayName}
 												</CardTitle>
 											</div>
-											<span
-												title={`${mastered ? "Mastered" : "Not mastered"} (${item.xp}/${requiredAffinity} Affinity, max level ${item.maxLevel})`}
-												className="inline-flex text-sm text-muted-foreground mb-2"
-											>
-												<span
-													aria-hidden="true"
-													className="relative inline-block h-6 w-6 shrink-0"
-												>
-													{mastered ? (
-														<span className="absolute inset-0 rounded-full bg-green-500/60 blur-sm" />
-													) : null}
+											<div className="inline-flex items-center gap-1.5 mb-2 text-sm text-muted-foreground">
+												{item.isSubsumed !== undefined ? (
 													<span
-														className={`relative inline-block h-6 w-6 ${mastered ? "bg-primary" : "bg-muted"}`}
-													style={{
-														maskImage: 'url("/icons/icon_mastery.svg")',
-														WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
-														maskRepeat: "no-repeat",
-														WebkitMaskRepeat: "no-repeat",
-														maskPosition: "center",
-														WebkitMaskPosition: "center",
-														maskSize: "contain",
-														WebkitMaskSize: "contain",
-													}}
-													/>
+														title={item.isSubsumed ? "Already subsumed" : "Not subsumed yet"}
+														className="inline-flex"
+													>
+														<span
+															aria-hidden="true"
+															className="relative inline-block w-6 h-6 shrink-0"
+														>
+															{item.isSubsumed ? (
+																<span className="absolute inset-0 rounded-full bg-red-500/60 blur-sm" />
+															) : null}
+															<span
+																className={`relative inline-block h-6 w-6 ${item.isSubsumed ? "bg-primary" : "bg-muted"}`}
+																style={{
+																	maskImage: 'url("/icons/helminth/icon_empower.svg")',
+																	WebkitMaskImage: 'url("/icons/helminth/icon_empower.svg")',
+																	maskRepeat: "no-repeat",
+																	WebkitMaskRepeat: "no-repeat",
+																	maskPosition: "center",
+																	WebkitMaskPosition: "center",
+																	maskSize: "contain",
+																	WebkitMaskSize: "contain",
+																}}
+															/>
+														</span>
+													</span>
+												) : null}
+												<span
+													title={`${mastered ? "Mastered" : "Not mastered"} (${item.xp}/${requiredAffinity} Affinity, max level ${item.maxLevel})`}
+													className="inline-flex"
+												>
+													<span
+														aria-hidden="true"
+														className="relative inline-block w-6 h-6 shrink-0"
+													>
+														{mastered ? (
+															<span className="absolute inset-0 rounded-full bg-green-500/60 blur-sm" />
+														) : null}
+														<span
+															className={`relative inline-block h-6 w-6 ${mastered ? "bg-primary" : "bg-muted"}`}
+															style={{
+																maskImage: 'url("/icons/icon_mastery.svg")',
+																WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
+																maskRepeat: "no-repeat",
+																WebkitMaskRepeat: "no-repeat",
+																maskPosition: "center",
+																WebkitMaskPosition: "center",
+																maskSize: "contain",
+																WebkitMaskSize: "contain",
+															}}
+														/>
+													</span>
 												</span>
-											</span>
+											</div>
 										</div>
 									</CardHeader>
 									<CardContent>
-										<div className="flex gap-2 items-start justify-between">
+										<div className="flex items-start justify-between gap-2">
 											<div className="shrink-0">
 												<img
 													src={item.imageUrl}
 													alt={item.name}
-													className="h-24 w-24 object-cover rounded-md"
+													className="object-cover w-24 h-24 rounded-md"
 												/>
 											</div>
 
@@ -136,7 +162,7 @@ function CollectionSection({
 														{item.parts.map((part, index) => (
 															<div
 																key={`${item.key}-${part.name}-${index}`}
-																className="relative group flex justify-center"
+																className="relative flex justify-center group"
 																title={`${part.name}${part.count ? ` x${part.count}` : ""}${part.owned === undefined ? "" : `: ${part.hasRecipe ? "Recipe owned" : part.owned ? "Owned" : "Missing"}`}`}
 															>
 																<img
@@ -149,7 +175,7 @@ function CollectionSection({
 																		x{part.count}
 																	</span>
 																) : null}
-																<span className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-popover text-popover-foreground rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+																<span className="absolute px-2 py-1 mb-2 text-xs transition-opacity transform -translate-x-1/2 rounded opacity-0 pointer-events-none bottom-full left-1/2 bg-popover text-popover-foreground whitespace-nowrap group-hover:opacity-100">
 																	{part.name}
 																</span>
 															</div>
@@ -175,16 +201,12 @@ function CollectionSection({
 	);
 }
 
-export function FoundryPage({
-	foundryFilter,
-	onFilterChange,
-	loading,
-	error,
-	warframes,
-	weapons,
-	companions,
-	onRefresh,
-}: FoundryPageProps) {
+export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
+	const foundryFilter = useStore(appStore, (state) => state.foundryFilter);
+	const warframes = useStore(appStore, (state) => state.warframes);
+	const weapons = useStore(appStore, (state) => state.weapons);
+	const companions = useStore(appStore, (state) => state.companions);
+	const loading = useStore(appStore, (state) => state.inventoryLoading);
 	const regularWarframes = warframes.filter(
 		(wf) => !wf.displayName.startsWith("<ARCHWING>"),
 	);
@@ -192,15 +214,17 @@ export function FoundryPage({
 		wf.displayName.startsWith("<ARCHWING>"),
 	);
 
-	weapons = weapons.filter((weapon) => weapon.excludeFromCodex !== true);
+	const filteredWeapons = weapons.filter(
+		(weapon) => weapon.excludeFromCodex !== true,
+	);
 
-	const archwingWeapons = weapons.filter(
+	const archwingWeapons = filteredWeapons.filter(
 		(weapon) =>
 			weapon.displayName.startsWith("<ARCHWING>") ||
 			weapon.productCategory === "SpaceMelee" ||
 			weapon.productCategory === "SpaceGuns",
 	);
-	const regularWeapons = weapons.filter(
+	const regularWeapons = filteredWeapons.filter(
 		(weapon) =>
 			!weapon.displayName.startsWith("<ARCHWING>") &&
 			weapon.productCategory !== "SpaceMelee" &&
@@ -214,6 +238,7 @@ export function FoundryPage({
 		displayName: wf.displayName,
 		xp: wf.xp,
 		isWeapon: false,
+		isSubsumed: wf.isSubsumed,
 		maxLevel: wf.maxLevel,
 		imageUrl: wf.imageUrl,
 		favorite: wf.favorite,
@@ -281,10 +306,10 @@ export function FoundryPage({
 	const meleeWeapons = regularWeapons.filter(
 		(weapon) => weapon.productCategory === "Melee",
 	);
-	const modularWeapons = weapons.filter((weapon) =>
+	const modularWeapons = filteredWeapons.filter((weapon) =>
 		weapon.uniqueName.includes("Modular"),
 	);
-	const sentinelWeapons = weapons.filter(
+	const sentinelWeapons = filteredWeapons.filter(
 		(weapon) => weapon.productCategory === "SentinelWeapons",
 	);
 
@@ -368,48 +393,53 @@ export function FoundryPage({
 		})),
 	}));
 
-	const companionCompanionItems: CollectionItem[] = companions.map((companion) => ({
-		key: companion.type,
-		name: companion.name,
-		displayName: companion.displayName,
-		xp: companion.xp,
-		isWeapon: false,
-		maxLevel: 30,
-		imageUrl: companion.imageUrl,
-		favorite: companion.favorite,
-		owned: companion.owned,
-		parts: companion.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-		})),
-	}));
-
-	const companionWeaponItems: CollectionItem[] = sentinelWeapons.map((weapon) => ({
-		key: weapon.type,
-		name: weapon.name,
-		displayName: weapon.displayName,
-		xp: weapon.xp,
-		isWeapon: true,
-		maxLevel:
-			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-		imageUrl: weapon.imageUrl,
-		favorite: weapon.favorite,
-		owned: weapon.owned,
-		parts: weapon.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-		})),
-	}));
-
-	const companionItems = [...companionCompanionItems, ...companionWeaponItems].sort(
-		(a, b) => a.displayName.localeCompare(b.displayName),
+	const companionCompanionItems: CollectionItem[] = companions.map(
+		(companion) => ({
+			key: companion.type,
+			name: companion.name,
+			displayName: companion.displayName,
+			xp: companion.xp,
+			isWeapon: false,
+			maxLevel: 30,
+			imageUrl: companion.imageUrl,
+			favorite: companion.favorite,
+			owned: companion.owned,
+			parts: companion.requirements.map((requirement) => ({
+				name: requirement.name,
+				count: requirement.count,
+				imageUrl: requirement.imageUrl,
+				owned: requirement.owned,
+				hasRecipe: requirement.hasRecipe,
+			})),
+		}),
 	);
+
+	const companionWeaponItems: CollectionItem[] = sentinelWeapons.map(
+		(weapon) => ({
+			key: weapon.type,
+			name: weapon.name,
+			displayName: weapon.displayName,
+			xp: weapon.xp,
+			isWeapon: true,
+			maxLevel:
+				(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
+			imageUrl: weapon.imageUrl,
+			favorite: weapon.favorite,
+			owned: weapon.owned,
+			parts: weapon.requirements.map((requirement) => ({
+				name: requirement.name,
+				count: requirement.count,
+				imageUrl: requirement.imageUrl,
+				owned: requirement.owned,
+				hasRecipe: requirement.hasRecipe,
+			})),
+		}),
+	);
+
+	const companionItems = [
+		...companionCompanionItems,
+		...companionWeaponItems,
+	].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
 	const getFilterButtonClasses = (active: boolean) =>
 		`group transition-all duration-200 ${active ? "gap-2 px-3" : "gap-0 px-2 hover:gap-2 hover:px-3"}`;
@@ -418,174 +448,200 @@ export function FoundryPage({
 		`whitespace-nowrap overflow-hidden transition-all duration-200 ${active ? "max-w-24 opacity-100" : "max-w-0 opacity-0 group-hover:max-w-24 group-hover:opacity-100"}`;
 
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div className="flex flex-col h-full min-h-0">
 			<div className="sticky top-0 z-10 bg-background">
 				<div className="flex flex-wrap gap-2 mb-2">
-				<Button
-					variant={foundryFilter === "warframes" ? "default" : "outline"}
-					onClick={() => onFilterChange("warframes")}
-					className={getFilterButtonClasses(foundryFilter === "warframes")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "warframes" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_warframe.svg")',
-							WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "warframes")}>Warframes</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "archwings" ? "default" : "outline"}
-					onClick={() => onFilterChange("archwings")}
-					className={getFilterButtonClasses(foundryFilter === "archwings")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "archwings" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_archwing.svg")',
-							WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "archwings")}>Archwings</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "primary" ? "default" : "outline"}
-					onClick={() => onFilterChange("primary")}
-					className={getFilterButtonClasses(foundryFilter === "primary")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "primary" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_rifle.svg")',
-							WebkitMaskImage: 'url("/icons/icon_rifle.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "primary")}>Primary</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "secondary" ? "default" : "outline"}
-					onClick={() => onFilterChange("secondary")}
-					className={getFilterButtonClasses(foundryFilter === "secondary")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "secondary" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_pistol.svg")',
-							WebkitMaskImage: 'url("/icons/icon_pistol.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "secondary")}>Secondary</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "melee" ? "default" : "outline"}
-					onClick={() => onFilterChange("melee")}
-					className={getFilterButtonClasses(foundryFilter === "melee")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "melee" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_melee.svg")',
-							WebkitMaskImage: 'url("/icons/icon_melee.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "melee")}>Melee</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "modular" ? "default" : "outline"}
-					onClick={() => onFilterChange("modular")}
-					className={getFilterButtonClasses(foundryFilter === "modular")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "modular" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_appearance.svg")',
-							WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "modular")}>Modular</span>
-				</Button>
-				<Button
-					variant={foundryFilter === "companions" ? "default" : "outline"}
-					onClick={() => onFilterChange("companions")}
-					className={getFilterButtonClasses(foundryFilter === "companions")}
-				>
-					<span
-						aria-hidden="true"
-						className={`h-6 w-6 shrink-0 ${foundryFilter === "companions" ? "bg-primary-foreground" : "bg-foreground"}`}
-						style={{
-							maskImage: 'url("/icons/icon_appearance.svg")',
-							WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
-							maskRepeat: "no-repeat",
-							WebkitMaskRepeat: "no-repeat",
-							maskPosition: "center",
-							WebkitMaskPosition: "center",
-							maskSize: "contain",
-							WebkitMaskSize: "contain",
-						}}
-					/>
-					<span className={getFilterLabelClasses(foundryFilter === "companions")}>Companions</span>
-				</Button>
-				<Button
-					onClick={onRefresh}
-					disabled={loading}
-					variant="secondary"
-					className="ml-auto gap-2"
-				>
-					{loading ? (
-						<>
-							<Loader2 className="h-4 w-4 animate-spin" />
-							Loading...
-						</>
-					) : (
-						<>
-							<RefreshCw className="h-4 w-4" />
-							Refresh
-						</>
-					)}
-				</Button>
+					<Button
+						variant={foundryFilter === "warframes" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("warframes")}
+						className={getFilterButtonClasses(foundryFilter === "warframes")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "warframes" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_warframe.svg")',
+								WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "warframes")}
+						>
+							Warframes
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "archwings" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("archwings")}
+						className={getFilterButtonClasses(foundryFilter === "archwings")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "archwings" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_archwing.svg")',
+								WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "archwings")}
+						>
+							Archwings
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "primary" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("primary")}
+						className={getFilterButtonClasses(foundryFilter === "primary")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "primary" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_rifle.svg")',
+								WebkitMaskImage: 'url("/icons/icon_rifle.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "primary")}
+						>
+							Primary
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "secondary" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("secondary")}
+						className={getFilterButtonClasses(foundryFilter === "secondary")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "secondary" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_pistol.svg")',
+								WebkitMaskImage: 'url("/icons/icon_pistol.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "secondary")}
+						>
+							Secondary
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "melee" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("melee")}
+						className={getFilterButtonClasses(foundryFilter === "melee")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "melee" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_melee.svg")',
+								WebkitMaskImage: 'url("/icons/icon_melee.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span className={getFilterLabelClasses(foundryFilter === "melee")}>
+							Melee
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "modular" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("modular")}
+						className={getFilterButtonClasses(foundryFilter === "modular")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "modular" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_appearance.svg")',
+								WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "modular")}
+						>
+							Modular
+						</span>
+					</Button>
+					<Button
+						variant={foundryFilter === "companions" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("companions")}
+						className={getFilterButtonClasses(foundryFilter === "companions")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "companions" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_sentinel.svg")',
+								WebkitMaskImage: 'url("/icons/icon_sentinel.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "companions")}
+						>
+							Companions
+						</span>
+					</Button>
+					<Button
+						onClick={onRefresh}
+						disabled={loading}
+						variant="secondary"
+						className="gap-2 ml-auto"
+					>
+						{loading ? (
+							<>
+								<Loader2 className="w-4 h-4 animate-spin" />
+								Loading...
+							</>
+						) : (
+							<>
+								<RefreshCw className="w-4 h-4" />
+								Refresh
+							</>
+						)}
+					</Button>
 				</div>
 
 				{error && (
@@ -596,7 +652,7 @@ export function FoundryPage({
 				)}
 			</div>
 
-			<ScrollArea className="min-h-0 flex-1">
+			<ScrollArea className="flex-1 min-h-0">
 				<div className="space-y-2">
 					{foundryFilter === "warframes" && (
 						<CollectionSection

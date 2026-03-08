@@ -1,3 +1,4 @@
+import { useStore } from "@tanstack/react-store";
 import { useEffect, useMemo, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -8,13 +9,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import type { OwnedRelic } from "@/types";
-
-interface RelicPlannerPageProps {
-	inventory: string;
-	relics: OwnedRelic[];
-	onVisibleRewardsChange?: (rewardNames: string[]) => void;
-}
+import { appStore, setAppVisibleRewardNames } from "@/store/appStore";
 
 function rarityOrder(rarity: string): number {
 	switch (rarity) {
@@ -38,11 +33,9 @@ function rewardRarityClasses(rarity: string): string {
 	}
 }
 
-export function RelicPlannerPage({
-	inventory,
-	relics,
-	onVisibleRewardsChange,
-}: RelicPlannerPageProps) {
+export function RelicPlannerPage() {
+	const inventory = useStore(appStore, (state) => state.inventory);
+	const relics = useStore(appStore, (state) => state.relics);
 	const gridRef = useRef<HTMLDivElement | null>(null);
 	const relicRewardNamesByRelic = useMemo(
 		() =>
@@ -56,18 +49,16 @@ export function RelicPlannerPage({
 	);
 
 	useEffect(() => {
-		if (!onVisibleRewardsChange) {
-			return;
-		}
-
 		if (!gridRef.current) {
-			onVisibleRewardsChange([]);
+			setAppVisibleRewardNames([]);
 			return;
 		}
 
-		const viewport = gridRef.current.closest("[data-slot='scroll-area-viewport']");
+		const viewport = gridRef.current.closest(
+			"[data-slot='scroll-area-viewport']",
+		);
 		if (!(viewport instanceof HTMLElement)) {
-			onVisibleRewardsChange([]);
+			setAppVisibleRewardNames([]);
 			return;
 		}
 
@@ -76,19 +67,30 @@ export function RelicPlannerPage({
 		const notifyVisibleRewards = () => {
 			const rewardNames = new Set<string>();
 			for (const relicUniqueName of visibleRelics) {
-				const rewardNamesForRelic = relicRewardNamesByRelic.get(relicUniqueName) ?? [];
+				const rewardNamesForRelic =
+					relicRewardNamesByRelic.get(relicUniqueName) ?? [];
 				for (const rewardName of rewardNamesForRelic) {
 					rewardNames.add(rewardName);
 				}
 			}
 
-			onVisibleRewardsChange([...rewardNames]);
+			setAppVisibleRewardNames((previous) => {
+				const normalized = [...rewardNames].sort();
+				if (
+					previous.length === normalized.length &&
+					previous.every((value, index) => value === normalized[index])
+				) {
+					return previous;
+				}
+				return normalized;
+			});
 		};
 
 		const observer = new IntersectionObserver(
 			(entries) => {
 				for (const entry of entries) {
-					const relicUniqueName = (entry.target as HTMLElement).dataset.relicUniqueName;
+					const relicUniqueName = (entry.target as HTMLElement).dataset
+						.relicUniqueName;
 					if (!relicUniqueName) {
 						continue;
 					}
@@ -108,7 +110,9 @@ export function RelicPlannerPage({
 			},
 		);
 
-		const cards = gridRef.current.querySelectorAll<HTMLElement>("[data-relic-unique-name]");
+		const cards = gridRef.current.querySelectorAll<HTMLElement>(
+			"[data-relic-unique-name]",
+		);
 		for (const card of cards) {
 			observer.observe(card);
 		}
@@ -118,7 +122,7 @@ export function RelicPlannerPage({
 		return () => {
 			observer.disconnect();
 		};
-	}, [onVisibleRewardsChange, relicRewardNamesByRelic]);
+	}, [relicRewardNamesByRelic]);
 
 	if (!inventory) {
 		return (
@@ -170,7 +174,9 @@ export function RelicPlannerPage({
 												</div>
 											</div>
 										</div>
-										<Badge variant="secondary" className="text-sm">x{relic.count}</Badge>
+										<Badge variant="secondary" className="text-sm">
+											x{relic.count}
+										</Badge>
 									</div>
 								</CardHeader>
 								<CardContent>
@@ -180,7 +186,11 @@ export function RelicPlannerPage({
 												<p className="text-lg font-semibold">
 													{relic.expectedDucats.toFixed(2)}
 												</p>
-												<img src="/OrokinDucats.png" alt="Ducats" className="w-8 h-8" />
+												<img
+													src="/OrokinDucats.png"
+													alt="Ducats"
+													className="w-8 h-8"
+												/>
 											</div>
 											<div className="flex items-center justify-end text-center">
 												{relic.isPlatinumReady ? (
@@ -190,10 +200,13 @@ export function RelicPlannerPage({
 												) : (
 													<span
 														className="inline-block w-4 h-4 border-2 rounded-full border-muted-foreground/50 border-t-transparent animate-spin"
-														aria-label="Loading platinum"
 													/>
 												)}
-												<img src="/PlatinumLarge.png" alt="Platinum" className="w-6 h-6 mx-1" />
+												<img
+													src="/PlatinumLarge.png"
+													alt="Platinum"
+													className="w-6 h-6 mx-1"
+												/>
 											</div>
 										</div>
 										<div className="grid flex-1 grid-cols-3 gap-2">

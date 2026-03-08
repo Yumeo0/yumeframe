@@ -2,7 +2,6 @@ use read_process_memory::{copy_address, Pid, ProcessHandle};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
-use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use sysinfo::System;
 

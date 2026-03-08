@@ -1,27 +1,29 @@
-import { invoke } from "@tauri-apps/api/core";
+import { useStore } from "@tanstack/react-store";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { useEffect, useRef, useState } from "react";
-import { type FoundryFilter, FoundryPage } from "@/components/app/FoundryPage";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FoundryPage } from "@/components/app/FoundryPage";
 import { MasteryHelperPage } from "@/components/app/MasteryHelperPage";
 import { RelicPlannerPage } from "@/components/app/RelicPlannerPage";
 import { SettingsPage } from "@/components/app/SettingsPage";
 import { Sidebar } from "@/components/app/Sidebar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useData } from "@/hooks/useData";
+import { useInventory } from "@/hooks/useInventory";
 import {
 	calculateExpectedDucats,
 	calculateExpectedPlatinum,
 } from "@/lib/relics.utils";
+import {
+	appStore,
+	setAppActiveTab,
+	setAppCompanions,
+	setAppRelics,
+	setAppRewardPlatinumFetchedAt,
+	setAppRewardPlatinumValues,
+	setAppWarframes,
+	setAppWeapons,
+} from "@/store/appStore";
 import type {
-	AssetEntry,
-	Companion,
-	ExportCompanionsWrapper,
-	ExportRecipesWrapper,
-	ExportRelicArcaneWrapper,
-	ExportResourcesWrapper,
-	ExportWarframeEntry,
-	ExportWarframesWrapper,
-	ExportWeaponEntry,
-	ExportWeaponsWrapper,
 	InventoryCompanionEntry,
 	InventoryMiscItem,
 	InventoryWeaponEntry,
@@ -29,31 +31,50 @@ import type {
 	OwnedCompanion,
 	OwnedRelic,
 	OwnedWeapon,
-	RecipeData,
 	VoidRelic,
 	Warframe,
 	WarframePart,
 	WarframeSuit,
 } from "@/types";
-import { WFMApiClient } from "../packages/wfm-api-client/src/index.js";
 
-type Tab = "foundry" | "mastery-helper" | "relic-planner" | "settings";
-const INVENTORY_CACHE_KEY = "yumeframe.inventory.cache";
 const RELIC_PRICE_CACHE_KEY = "yumeframe.relic.price.cache";
-const RELIC_PRICE_CACHE_TTL_MS = 10 * 60 * 1000;
-const WFM_REQUEST_INTERVAL_MS = 350;
-const wfmClient = new WFMApiClient(undefined, tauriFetch as typeof fetch);
+const RELIC_DAILY_MARKET_CACHE_KEY = "yumeframe.relic.daily.market.cache";
+const WFM_DAILY_MARKET_PRICES_URL =
+	"https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json";
+
+interface MarketTopOrders {
+	buy?: Array<{ platinum: number }>;
+	sell?: Array<{ platinum: number }>;
+}
+
+interface DailyMarketPriceItem {
+	slug: string;
+	itemName: string;
+	topOrders?: MarketTopOrders;
+}
+
+interface DailyMarketPricePayload {
+	generatedAt?: string;
+	items?: DailyMarketPriceItem[];
+}
+
+interface DailyMarketPriceLookup {
+	dayKey: string;
+	fetchedAt: number;
+	pricesBySlug: Record<string, number>;
+	pricesByName: Record<string, number>;
+}
 
 function normalizeRewardGameRef(gameRef: string): string {
 	return gameRef.replace("/StoreItems", "");
 }
 
-function estimateTopOrderPrice(orders: {
-	buy: Array<{ platinum: number }>;
-	sell: Array<{ platinum: number }>;
-}): number {
-	const bestBuy = orders.buy.length > 0 ? orders.buy[0].platinum : null;
-	const bestSell = orders.sell.length > 0 ? orders.sell[0].platinum : null;
+function estimateTopOrderPrice(orders: MarketTopOrders): number {
+	const buyOrders = orders.buy ?? [];
+	const sellOrders = orders.sell ?? [];
+
+	const bestBuy = buyOrders.length > 0 ? buyOrders[0].platinum : null;
+	const bestSell = sellOrders.length > 0 ? sellOrders[0].platinum : null;
 
 	if (bestBuy !== null && bestSell !== null) {
 		return Math.round(((bestBuy + bestSell) / 2) * 100) / 100;
@@ -68,6 +89,53 @@ function estimateTopOrderPrice(orders: {
 	}
 
 	return 0;
+}
+
+function getUtcDayKey(dateLike: Date | number | string = Date.now()): string {
+	const parsed = new Date(dateLike);
+	if (Number.isNaN(parsed.getTime())) {
+		return new Date().toISOString().slice(0, 10);
+	}
+	return parsed.toISOString().slice(0, 10);
+}
+
+function normalizeMarketName(value: string): string {
+	return value
+		.toLowerCase()
+		.replace(/['’]/g, "")
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function slugifyMarketName(value: string): string {
+	return normalizeMarketName(value).replace(/\s+/g, "_");
+}
+
+function getRewardFallbackName(rewardName: string): string {
+	const tail = rewardName.split("/").pop() || rewardName;
+	return tail.replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+}
+
+function buildDailyMarketPriceLookup(
+	items: DailyMarketPriceItem[],
+	dayKey: string,
+	fetchedAt: number,
+): DailyMarketPriceLookup {
+	const pricesBySlug: Record<string, number> = {};
+	const pricesByName: Record<string, number> = {};
+
+	for (const item of items) {
+		const price = estimateTopOrderPrice(item.topOrders ?? {});
+		pricesBySlug[item.slug] = price;
+		pricesByName[normalizeMarketName(item.itemName)] = price;
+	}
+
+	return {
+		dayKey,
+		fetchedAt,
+		pricesBySlug,
+		pricesByName,
+	};
 }
 
 function buildOwnedRelics(
@@ -180,82 +248,45 @@ function buildOwnedRelics(
 }
 
 function App() {
-	const [inventory, setInventory] = useState("");
-	const [assets, setAssets] = useState<AssetEntry[]>([]);
-	const [manifest, setManifest] = useState<ManifestEntry[]>([]);
-	const [warframes, setWarframes] = useState<Warframe[]>([]);
-	const [weapons, setWeapons] = useState<OwnedWeapon[]>([]);
-	const [companions, setCompanions] = useState<OwnedCompanion[]>([]);
-	const [warframeNames, setWarframeNames] = useState<Record<string, string>>(
-		{},
+	const {
+		inventory,
+		error: inventoryError,
+		refreshInventory,
+	} = useInventory();
+	const {
+		assets,
+		manifest,
+		warframeNames,
+		warframeData,
+		weaponNames,
+		weaponData,
+		companionNames,
+		companionData,
+		relicData,
+		recipeData,
+		recipeDucatValues,
+		resourceNames,
+		indexLoading,
+		error: dataError,
+	} = useData();
+	const activeTab = useStore(appStore, (state) => state.activeTab);
+	const visibleRewardNames = useStore(
+		appStore,
+		(state) => state.visibleRewardNames,
 	);
-	const [warframeData, setWarframeData] = useState<
-		Record<string, ExportWarframeEntry>
-	>({});
-	const [weaponNames, setWeaponNames] = useState<Record<string, string>>({});
-	const [weaponData, setWeaponData] = useState<
-		Record<string, ExportWeaponEntry>
-	>({});
-	const [companionNames, setCompanionNames] = useState<Record<string, string>>(
-		{},
+	const rewardPlatinumValues = useStore(
+		appStore,
+		(state) => state.rewardPlatinumValues,
 	);
-	const [companionData, setCompanionData] = useState<Record<string, Companion>>(
-		{},
+	const rewardPlatinumFetchedAt = useStore(
+		appStore,
+		(state) => state.rewardPlatinumFetchedAt,
 	);
-	const [relicData, setRelicData] = useState<Record<string, VoidRelic>>({});
-	const [relics, setRelics] = useState<OwnedRelic[]>([]);
-	const [wfmItemSlugsByGameRef, setWfmItemSlugsByGameRef] = useState<
-		Record<string, string>
-	>({});
-	const [visibleRewardNames, setVisibleRewardNames] = useState<string[]>([]);
-	const [rewardPlatinumValues, setRewardPlatinumValues] = useState<
-		Record<string, number>
-	>({});
-	const [rewardPlatinumFetchedAt, setRewardPlatinumFetchedAt] = useState<
-		Record<string, number>
-	>({});
 	const rewardPlatinumValuesRef = useRef<Record<string, number>>({});
 	const rewardPlatinumFetchedAtRef = useRef<Record<string, number>>({});
-	const rewardPlatinumFetchInFlightRef = useRef(new Set<string>());
-	const rewardPriceQueueRef = useRef(new Map<string, string>());
-	const rewardPriceWorkerRunningRef = useRef(false);
-	const lastRewardPriceRequestAtRef = useRef(0);
-	const visibleNormalizedRewardNamesRef = useRef(new Set<string>());
-	const [recipeDucatValues, setRecipeDucatValues] = useState<
-		Record<string, number>
-	>({});
-	const [resourceNames, setResourceNames] = useState<Record<string, string>>(
-		{},
-	);
-	const [recipeData, setRecipeData] = useState<Record<string, RecipeData>>({});
-	const [error, setError] = useState("");
-	const [loading, setLoading] = useState(false);
-	const [indexLoading, setIndexLoading] = useState(true);
-	const [activeTab, setActiveTab] = useState<Tab>("foundry");
-	const [foundryFilter, setFoundryFilter] =
-		useState<FoundryFilter>("warframes");
-	const [cachedInventoryOnStart, setCachedInventoryOnStart] = useState<
-		string | null
-	>(null);
-	const [startupCacheHydrated, setStartupCacheHydrated] = useState(false);
-
-	// Load Warframe asset index on app start
-	// biome-ignore lint/correctness/useExhaustiveDependencies: loadWarframeIndex changes on every re-render and should not be used as a hook dependency
-	useEffect(() => {
-		loadWarframeIndex();
-	}, []);
-
-	useEffect(() => {
-		try {
-			const cachedInventory = localStorage.getItem(INVENTORY_CACHE_KEY);
-			if (cachedInventory) {
-				setInventory(cachedInventory);
-				setCachedInventoryOnStart(cachedInventory);
-			}
-		} catch (err) {
-			console.error("Failed to read cached inventory:", err);
-		}
-	}, []);
+	const [dailyMarketPriceLookup, setDailyMarketPriceLookup] =
+		useState<DailyMarketPriceLookup | null>(null);
+	const error = inventoryError || dataError;
 
 	useEffect(() => {
 		rewardPlatinumValuesRef.current = rewardPlatinumValues;
@@ -277,14 +308,14 @@ function App() {
 				fetchedAt?: Record<string, number>;
 			};
 
-			const now = Date.now();
+			const todayKey = getUtcDayKey();
 			const validFetchedAt: Record<string, number> = {};
 			const validValues: Record<string, number> = {};
 
 			for (const [rewardName, fetchedAt] of Object.entries(
 				parsed.fetchedAt ?? {},
 			)) {
-				if (now - fetchedAt <= RELIC_PRICE_CACHE_TTL_MS) {
+				if (getUtcDayKey(fetchedAt) === todayKey) {
 					validFetchedAt[rewardName] = fetchedAt;
 					if (parsed.values?.[rewardName] !== undefined) {
 						validValues[rewardName] = parsed.values[rewardName];
@@ -294,8 +325,8 @@ function App() {
 
 			rewardPlatinumFetchedAtRef.current = validFetchedAt;
 			rewardPlatinumValuesRef.current = validValues;
-			setRewardPlatinumFetchedAt(validFetchedAt);
-			setRewardPlatinumValues(validValues);
+			setAppRewardPlatinumFetchedAt(validFetchedAt);
+			setAppRewardPlatinumValues(validValues);
 		} catch (err) {
 			console.error("Failed to read relic price cache:", err);
 		}
@@ -315,29 +346,78 @@ function App() {
 		}
 	}, [rewardPlatinumFetchedAt, rewardPlatinumValues]);
 
-	// Load manifest when assets are ready
-	// biome-ignore lint/correctness/useExhaustiveDependencies: assets dependency is intentional
 	useEffect(() => {
-		if (assets.length > 0) {
-			loadManifest();
-			loadWarframeNames();
-			loadWeaponData();
-			loadCompanionData();
-			loadRelicData();
-			loadRecipeData();
-			loadResourceData();
+		let isCancelled = false;
+
+		async function loadDailyMarketSnapshot() {
+			const todayKey = getUtcDayKey();
+
+			try {
+				const rawCachedLookup = localStorage.getItem(RELIC_DAILY_MARKET_CACHE_KEY);
+				if (rawCachedLookup) {
+					const cachedLookup = JSON.parse(rawCachedLookup) as DailyMarketPriceLookup;
+					if (
+						cachedLookup.dayKey === todayKey &&
+						cachedLookup.pricesBySlug &&
+						cachedLookup.pricesByName
+					) {
+						if (!isCancelled) {
+							setDailyMarketPriceLookup(cachedLookup);
+						}
+						return;
+					}
+				}
+			} catch (err) {
+				console.error("Failed to read cached daily market prices:", err);
+			}
+
+			try {
+				const response = await tauriFetch(WFM_DAILY_MARKET_PRICES_URL);
+				if (!response.ok) {
+					throw new Error(`HTTP ${response.status}`);
+				}
+
+				const payload = (await response.json()) as DailyMarketPricePayload;
+				const fetchedAt = Date.now();
+				const lookup = buildDailyMarketPriceLookup(
+					payload.items ?? [],
+					todayKey,
+					fetchedAt,
+				);
+
+				try {
+					localStorage.setItem(
+						RELIC_DAILY_MARKET_CACHE_KEY,
+						JSON.stringify(lookup),
+					);
+				} catch (err) {
+					console.error("Failed to cache daily market prices:", err);
+				}
+
+				if (!isCancelled) {
+					setDailyMarketPriceLookup(lookup);
+				}
+			} catch (err) {
+				console.error("Failed to fetch daily market prices:", err);
+			}
 		}
-	}, [assets]);
+
+		loadDailyMarketSnapshot();
+
+		return () => {
+			isCancelled = true;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (!inventory) {
-			setRelics([]);
+			setAppRelics([]);
 			return;
 		}
 
 		try {
 			const inventoryData = JSON.parse(inventory) as Record<string, unknown>;
-			setRelics(
+			setAppRelics(
 				buildOwnedRelics(
 					inventoryData,
 					relicData,
@@ -349,7 +429,7 @@ function App() {
 			);
 		} catch (err) {
 			console.error("Failed to parse relic inventory:", err);
-			setRelics([]);
+			setAppRelics([]);
 		}
 	}, [
 		inventory,
@@ -361,393 +441,90 @@ function App() {
 	]);
 
 	useEffect(() => {
-		let isCancelled = false;
-
-		async function loadWfmItems() {
-			try {
-				const response = await wfmClient.getItems();
-				const items = response.data ?? [];
-				const slugsByGameRef: Record<string, string> = {};
-
-				for (const item of items) {
-					const normalizedGameRef = normalizeRewardGameRef(item.gameRef);
-					slugsByGameRef[normalizedGameRef] = item.slug;
-				}
-
-				if (!isCancelled) {
-					setWfmItemSlugsByGameRef(slugsByGameRef);
-				}
-			} catch (err) {
-				console.error("Failed to load WFM item list:", err);
-			}
-		}
-
-		loadWfmItems();
-
-		return () => {
-			isCancelled = true;
-		};
-	}, []);
-
-	useEffect(() => {
-		visibleNormalizedRewardNamesRef.current = new Set(
-			visibleRewardNames.map((rewardName) =>
-				normalizeRewardGameRef(rewardName),
-			),
-		);
-	}, [visibleRewardNames]);
-
-	useEffect(() => {
-		if (
-			visibleRewardNames.length === 0 ||
-			Object.keys(wfmItemSlugsByGameRef).length === 0
-		) {
+		if (visibleRewardNames.length === 0) {
 			return;
 		}
 
-		const missingRewards = new Map<string, string>();
-		const now = Date.now();
+		const marketLookup = dailyMarketPriceLookup;
+		if (!marketLookup) {
+			return;
+		}
+
+		const nextValues = { ...rewardPlatinumValuesRef.current };
+		const nextFetchedAt = { ...rewardPlatinumFetchedAtRef.current };
+		let hasChanges = false;
+
 		for (const rewardName of visibleRewardNames) {
 			const normalizedRewardName = normalizeRewardGameRef(rewardName);
-			const lastFetchedAt =
-				rewardPlatinumFetchedAtRef.current[normalizedRewardName];
-			const isFresh =
-				lastFetchedAt !== undefined &&
-				now - lastFetchedAt <= RELIC_PRICE_CACHE_TTL_MS;
+			const rewardDisplayName =
+				resourceNames[normalizedRewardName] ||
+				weaponNames[normalizedRewardName] ||
+				warframeNames[normalizedRewardName] ||
+				companionNames[normalizedRewardName] ||
+				getRewardFallbackName(normalizedRewardName);
 
-			if (
-				isFresh &&
-				rewardPlatinumValuesRef.current[normalizedRewardName] !== undefined
-			) {
-				continue;
+			const directPrice =
+				marketLookup.pricesByName[normalizeMarketName(rewardDisplayName)] ??
+				marketLookup.pricesBySlug[slugifyMarketName(rewardDisplayName)] ??
+				0;
+
+			if (nextValues[normalizedRewardName] !== directPrice) {
+				nextValues[normalizedRewardName] = directPrice;
+				hasChanges = true;
 			}
 
-			if (rewardPlatinumFetchInFlightRef.current.has(normalizedRewardName)) {
-				continue;
+			if (nextFetchedAt[normalizedRewardName] !== marketLookup.fetchedAt) {
+				nextFetchedAt[normalizedRewardName] = marketLookup.fetchedAt;
+				hasChanges = true;
 			}
-
-			const rewardSlug = wfmItemSlugsByGameRef[normalizedRewardName];
-			if (!rewardSlug) {
-				const fetchedAt = Date.now();
-				rewardPlatinumValuesRef.current = {
-					...rewardPlatinumValuesRef.current,
-					[normalizedRewardName]: 0,
-				};
-				rewardPlatinumFetchedAtRef.current = {
-					...rewardPlatinumFetchedAtRef.current,
-					[normalizedRewardName]: fetchedAt,
-				};
-				setRewardPlatinumValues((previous) => ({
-					...previous,
-					[normalizedRewardName]: 0,
-				}));
-				setRewardPlatinumFetchedAt((previous) => ({
-					...previous,
-					[normalizedRewardName]: fetchedAt,
-				}));
-				continue;
-			}
-
-			missingRewards.set(normalizedRewardName, rewardSlug);
 		}
 
-		if (missingRewards.size === 0) {
+		if (!hasChanges) {
 			return;
 		}
 
-		for (const [rewardName, slug] of missingRewards.entries()) {
-			rewardPriceQueueRef.current.set(rewardName, slug);
-		}
-
-		const sleep = (ms: number) =>
-			new Promise<void>((resolve) => {
-				setTimeout(resolve, ms);
-			});
-
-		const processQueue = async () => {
-			if (rewardPriceWorkerRunningRef.current) {
-				return;
-			}
-
-			rewardPriceWorkerRunningRef.current = true;
-			try {
-				while (rewardPriceQueueRef.current.size > 0) {
-					const firstEntry = rewardPriceQueueRef.current.entries().next().value as
-						| [string, string]
-						| undefined;
-					if (!firstEntry) {
-						break;
-					}
-
-					const [rewardName, slug] = firstEntry;
-					rewardPriceQueueRef.current.delete(rewardName);
-
-					if (!visibleNormalizedRewardNamesRef.current.has(rewardName)) {
-						continue;
-					}
-
-					const lastFetchedAt = rewardPlatinumFetchedAtRef.current[rewardName];
-					const isFresh =
-						lastFetchedAt !== undefined &&
-						Date.now() - lastFetchedAt <= RELIC_PRICE_CACHE_TTL_MS;
-					if (isFresh && rewardPlatinumValuesRef.current[rewardName] !== undefined) {
-						continue;
-					}
-
-					const sinceLastRequest =
-						Date.now() - lastRewardPriceRequestAtRef.current;
-					if (sinceLastRequest < WFM_REQUEST_INTERVAL_MS) {
-						await sleep(WFM_REQUEST_INTERVAL_MS - sinceLastRequest);
-					}
-
-					rewardPlatinumFetchInFlightRef.current.add(rewardName);
-					lastRewardPriceRequestAtRef.current = Date.now();
-
-					try {
-						const topOrdersResponse = await wfmClient.getTopOrdersByItem(slug);
-						const topOrders = topOrdersResponse.data;
-						const price = topOrders ? estimateTopOrderPrice(topOrders) : 0;
-						const fetchedAt = Date.now();
-						rewardPlatinumValuesRef.current = {
-							...rewardPlatinumValuesRef.current,
-							[rewardName]: price,
-						};
-						rewardPlatinumFetchedAtRef.current = {
-							...rewardPlatinumFetchedAtRef.current,
-							[rewardName]: fetchedAt,
-						};
-						setRewardPlatinumValues((previous) => ({
-							...previous,
-							[rewardName]: price,
-						}));
-						setRewardPlatinumFetchedAt((previous) => ({
-							...previous,
-							[rewardName]: fetchedAt,
-						}));
-					} catch (err) {
-						console.error(`Failed to load order price for ${slug}:`, err);
-						const fetchedAt = Date.now();
-						rewardPlatinumValuesRef.current = {
-							...rewardPlatinumValuesRef.current,
-							[rewardName]: 0,
-						};
-						rewardPlatinumFetchedAtRef.current = {
-							...rewardPlatinumFetchedAtRef.current,
-							[rewardName]: fetchedAt,
-						};
-						setRewardPlatinumValues((previous) => ({
-							...previous,
-							[rewardName]: 0,
-						}));
-						setRewardPlatinumFetchedAt((previous) => ({
-							...previous,
-							[rewardName]: fetchedAt,
-						}));
-					} finally {
-						rewardPlatinumFetchInFlightRef.current.delete(rewardName);
-					}
-				}
-			} finally {
-				rewardPriceWorkerRunningRef.current = false;
-			}
-		};
-
-		processQueue();
+		rewardPlatinumValuesRef.current = nextValues;
+		rewardPlatinumFetchedAtRef.current = nextFetchedAt;
+		setAppRewardPlatinumValues(nextValues);
+		setAppRewardPlatinumFetchedAt(nextFetchedAt);
 	}, [
 		visibleRewardNames,
-		wfmItemSlugsByGameRef,
-	]);
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: startup cache hydration intentionally waits for multiple loaded datasets
-	useEffect(() => {
-		if (startupCacheHydrated || !cachedInventoryOnStart) {
-			return;
-		}
-
-		if (
-			Object.keys(warframeData).length === 0 &&
-			Object.keys(weaponData).length === 0 &&
-			Object.keys(companionData).length === 0
-		) {
-			return;
-		}
-
-		try {
-			applyInventoryData(cachedInventoryOnStart);
-			setStartupCacheHydrated(true);
-			console.log("Loaded inventory from cache");
-		} catch (err) {
-			console.error("Failed to hydrate cached inventory:", err);
-			setStartupCacheHydrated(true);
-		}
-	}, [
-		startupCacheHydrated,
-		cachedInventoryOnStart,
-		warframeData,
-		weaponData,
-		companionData,
-		manifest,
-		recipeData,
-		resourceNames,
+		dailyMarketPriceLookup,
 		warframeNames,
 		weaponNames,
 		companionNames,
+		resourceNames,
 	]);
 
-	async function loadWarframeIndex() {
-		setIndexLoading(true);
-		setError("");
-		try {
-			const result = await invoke<AssetEntry[]>("fetch_warframe_index");
-			setAssets(result);
-			console.log(`Loaded ${result.length} asset entries`);
-		} catch (err) {
-			setError(`Failed to load asset index: ${err}`);
-			console.error(err);
-		} finally {
-			setIndexLoading(false);
-		}
-	}
-
-	async function loadManifest() {
-		try {
-			const result = await invoke<string>("fetch_warframe_manifest", {
-				assets,
-			});
-			const manifestData = JSON.parse(result);
-			setManifest(manifestData.Manifest || []);
-			console.log("Manifest loaded successfully");
-		} catch (err) {
-			console.error("Failed to load manifest:", err);
-		}
-	}
-
-	async function loadWarframeNames() {
-		try {
-			const rawJson = await invoke<string>("fetch_warframe_data", { assets });
-			const data: ExportWarframesWrapper = JSON.parse(rawJson);
-
-			const names: Record<string, string> = {};
-			const exportData: Record<string, ExportWarframeEntry> = {};
-			for (const wf of data.ExportWarframes) {
-				names[wf.uniqueName] = wf.name;
-				exportData[wf.uniqueName] = wf;
-			}
-
-			setWarframeNames(names);
-			setWarframeData(exportData);
-			console.log(`Loaded ${Object.keys(names).length} warframe names`);
-		} catch (err) {
-			console.error("Failed to load warframe names:", err);
-		}
-	}
-
-	async function loadWeaponData() {
-		try {
-			const rawJson = await invoke<string>("fetch_weapon_data", { assets });
-			const data: ExportWeaponsWrapper = JSON.parse(rawJson);
-
-			const names: Record<string, string> = {};
-			const weaponMap: Record<string, ExportWeaponEntry> = {};
-			for (const weapon of data.ExportWeapons) {
-				names[weapon.uniqueName] = weapon.name;
-				weaponMap[weapon.uniqueName] = weapon;
-			}
-
-			setWeaponNames(names);
-			setWeaponData(weaponMap);
-			console.log(`Loaded ${Object.keys(names).length} weapon names`);
-		} catch (err) {
-			console.error("Failed to load weapon data:", err);
-		}
-	}
-
-	async function loadCompanionData() {
-		try {
-			const rawJson = await invoke<string>("fetch_companion_data", { assets });
-			const data: ExportCompanionsWrapper = JSON.parse(rawJson);
-
-			const names: Record<string, string> = {};
-			const companionMap: Record<string, Companion> = {};
-			for (const companion of data.ExportSentinels) {
-				names[companion.uniqueName] = companion.name;
-				companionMap[companion.uniqueName] = companion;
-			}
-
-			setCompanionNames(names);
-			setCompanionData(companionMap);
-			console.log(`Loaded ${Object.keys(names).length} companions`);
-		} catch (err) {
-			console.error("Failed to load companion data:", err);
-		}
-	}
-
-	async function loadRecipeData() {
-		try {
-			const rawJson = await invoke<string>("fetch_recipe_data", { assets });
-			const data: ExportRecipesWrapper = JSON.parse(rawJson);
-
-			const recipes: Record<string, RecipeData> = {};
-			const ducatValues: Record<string, number> = {};
-			for (const recipe of data.ExportRecipes) {
-				recipes[recipe.resultType] = recipe;
-				if (typeof recipe.primeSellingPrice === "number") {
-					ducatValues[recipe.uniqueName] = recipe.primeSellingPrice;
-					ducatValues[recipe.resultType] = recipe.primeSellingPrice;
-				}
-			}
-
-			setRecipeData(recipes);
-			setRecipeDucatValues(ducatValues);
-			console.log(`Loaded ${Object.keys(recipes).length} recipes`);
-		} catch (err) {
-			console.error("Failed to load recipe data:", err);
-		}
-	}
-
-	async function loadRelicData() {
-		try {
-			const rawJson = await invoke<string>("fetch_relic_data", { assets });
-			const data: ExportRelicArcaneWrapper = JSON.parse(rawJson);
-
-			const relicMap: Record<string, VoidRelic> = {};
-			for (const entry of data.ExportRelicArcane || []) {
-				if (
-					entry.uniqueName?.includes("/Lotus/Types/Game/Projections/") &&
-					Array.isArray(entry.relicRewards)
-				) {
-					relicMap[entry.uniqueName] = entry;
-				}
-			}
-
-			setRelicData(relicMap);
-			console.log(`Loaded ${Object.keys(relicMap).length} relic entries`);
-		} catch (err) {
-			console.error("Failed to load relic data:", err);
-		}
-	}
-
-	async function loadResourceData() {
-		try {
-			const rawJson = await invoke<string>("fetch_resource_data", { assets });
-			const data: ExportResourcesWrapper = JSON.parse(rawJson);
-
-			const names: Record<string, string> = {};
-			for (const resource of data.ExportResources) {
-				names[resource.uniqueName] = resource.name;
-			}
-
-			setResourceNames(names);
-			console.log(`Loaded ${Object.keys(names).length} resource names`);
-		} catch (err) {
-			console.error("Failed to load resource data:", err);
-		}
-	}
-
-	function applyInventoryData(result: string) {
+	const applyInventoryData = useCallback((result: string) => {
 		const inventoryData = JSON.parse(result);
 		const suits: WarframeSuit[] = inventoryData.Suits || [];
 		const spaceSuits: WarframeSuit[] = inventoryData.SpaceSuits || [];
+		interface ConsumedSuitEntry {
+			s?: string;
+			S?: string;
+			ItemType?: string;
+			itemType?: string;
+		}
+		const normalizeTypePath = (value: string): string => {
+			const trimmed = value.trim();
+			if (trimmed.length === 0) {
+				return "";
+			}
+			return trimmed.toLowerCase().replace(/\\/g, "/");
+		};
+		const consumedSuits: ConsumedSuitEntry[] =
+			inventoryData.InfestedFoundry?.ConsumedSuits || [];
+		const consumedSuitTypes = new Set(
+			consumedSuits
+				.map((entry) =>
+					normalizeTypePath(
+						entry.s ?? entry.S ?? entry.ItemType ?? entry.itemType ?? "",
+					),
+				)
+				.filter((value): value is string => value.length > 0),
+		);
+
 		interface XPInfoEntry {
 			ItemType: string;
 			XP: number;
@@ -812,16 +589,6 @@ function App() {
 			const currentCount = ownedMiscCounts.get(miscItem.ItemType) ?? 0;
 			ownedMiscCounts.set(miscItem.ItemType, currentCount + miscItem.ItemCount);
 		}
-		setRelics(
-			buildOwnedRelics(
-				inventoryData,
-				relicData,
-				manifest,
-				recipeDucatValues,
-				rewardPlatinumValues,
-				rewardPlatinumFetchedAt,
-			),
-		);
 
 		const manifestMap = new Map<string, string>();
 		for (const entry of manifest) {
@@ -905,13 +672,15 @@ function App() {
 					imageUrl,
 					favorite: ownedData?.Favorite || false,
 					owned: isOwned,
+					isSubsumed: consumedSuitTypes.has(normalizeTypePath(uniqueName)),
 					parts,
 				};
 			},
 		);
 
 		wfList.sort((a, b) => a.displayName.localeCompare(b.displayName));
-		setWarframes(wfList);
+		console.log(wfList);
+		setAppWarframes(wfList);
 
 		const allWeapons: OwnedWeapon[] = Object.entries(weaponData).map(
 			([uniqueName, weaponInfo]) => {
@@ -965,7 +734,7 @@ function App() {
 		);
 
 		allWeapons.sort((a, b) => a.displayName.localeCompare(b.displayName));
-		setWeapons(allWeapons);
+		setAppWeapons(allWeapons);
 
 		const allCompanions: OwnedCompanion[] = Object.entries(companionData)
 			.filter(([, companionInfo]) => companionInfo.excludeFromCodex !== true)
@@ -1022,7 +791,7 @@ function App() {
 			});
 
 		allCompanions.sort((a, b) => a.displayName.localeCompare(b.displayName));
-		setCompanions(allCompanions);
+		setAppCompanions(allCompanions);
 
 		console.log(
 			`Loaded ${wfList.length} warframes/archwings (${suits.length} warframes + ${spaceSuits.length} archwings owned)`,
@@ -1033,73 +802,57 @@ function App() {
 		console.log(
 			`Loaded ${allCompanions.length} companions (${ownedCompanionDetails.size} owned from Sentinels/KubrowPets)`,
 		);
-	}
+	}, [
+		warframeData,
+		weaponData,
+		companionData,
+		recipeData,
+		weaponNames,
+		warframeNames,
+		companionNames,
+		resourceNames,
+		manifest,
+	]);
 
-	async function fetchInventory() {
-		setLoading(true);
-		setError("");
-		try {
-			const result = await invoke<string>("fetch_warframe_inventory");
-			setInventory(result);
-			setCachedInventoryOnStart(result);
-			setStartupCacheHydrated(true);
-
-			try {
-				localStorage.setItem(INVENTORY_CACHE_KEY, result);
-			} catch (err) {
-				console.error("Failed to cache inventory:", err);
-			}
-
-			applyInventoryData(result);
-		} catch (err) {
-			setError(`Error: ${err}`);
-		} finally {
-			setLoading(false);
+	useEffect(() => {
+		if (!inventory) {
+			setAppWarframes([]);
+			setAppWeapons([]);
+			setAppCompanions([]);
+			return;
 		}
-	}
+
+		if (
+			Object.keys(warframeData).length === 0 &&
+			Object.keys(weaponData).length === 0 &&
+			Object.keys(companionData).length === 0
+		) {
+			return;
+		}
+
+		try {
+			applyInventoryData(inventory);
+		} catch (err) {
+			console.error("Failed to apply inventory data:", err);
+		}
+	}, [inventory, warframeData, weaponData, companionData, applyInventoryData]);
 
 	return (
 		<div className="flex h-screen overflow-hidden bg-background">
-			<Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-			<main className="flex-1 min-h-0 p-2">
+			<Sidebar activeTab={activeTab} onTabChange={setAppActiveTab} />
+			<main className="flex-1 min-h-0 p-2 pb-0">
 				{activeTab === "foundry" ? (
 					<FoundryPage
-						foundryFilter={foundryFilter}
-						onFilterChange={setFoundryFilter}
-						loading={loading}
 						error={error}
-						warframes={warframes}
-						weapons={weapons}
-						companions={companions}
-						onRefresh={fetchInventory}
+						onRefresh={refreshInventory}
 					/>
 				) : activeTab === "mastery-helper" ? (
 					<div className="h-full">
-						<MasteryHelperPage
-							inventory={inventory}
-							warframes={warframes}
-							weapons={weapons}
-							companions={companions}
-						/>
+						<MasteryHelperPage />
 					</div>
 				) : activeTab === "relic-planner" ? (
 					<div className="h-full">
-						<RelicPlannerPage
-							inventory={inventory}
-							relics={relics}
-							onVisibleRewardsChange={(rewardNames) => {
-								const normalized = [...new Set(rewardNames)].sort();
-								setVisibleRewardNames((previous) => {
-									if (
-										previous.length === normalized.length &&
-										previous.every((value, index) => value === normalized[index])
-									) {
-										return previous;
-									}
-									return normalized;
-								});
-							}}
-						/>
+						<RelicPlannerPage />
 					</div>
 				) : (
 					<ScrollArea className="h-full">

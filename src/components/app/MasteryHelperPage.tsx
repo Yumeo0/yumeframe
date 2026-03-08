@@ -1,3 +1,4 @@
+import { useStore } from "@tanstack/react-store";
 import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
@@ -16,14 +17,7 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import nodeData from "@/data/nodeData.json";
 import { calculateMasterySummary } from "@/lib/mastery.utils";
-import type { OwnedCompanion, OwnedWeapon, Warframe } from "@/types";
-
-interface MasteryHelperPageProps {
-	inventory: string;
-	warframes: Warframe[];
-	weapons: OwnedWeapon[];
-	companions: OwnedCompanion[];
-}
+import { appStore } from "@/store/appStore";
 
 interface NodeXpData {
 	nodeXP?: Record<string, number>;
@@ -70,12 +64,11 @@ function getRemainingMasteryXp(
 	return Math.max(0, (maxLevel - currentRank) * masteryPerRank);
 }
 
-export function MasteryHelperPage({
-	inventory,
-	warframes,
-	weapons,
-	companions,
-}: MasteryHelperPageProps) {
+export function MasteryHelperPage() {
+	const inventory = useStore(appStore, (state) => state.inventory);
+	const warframes = useStore(appStore, (state) => state.warframes);
+	const weapons = useStore(appStore, (state) => state.weapons);
+	const companions = useStore(appStore, (state) => state.companions);
 	const [open, setOpen] = useState(false);
 
 	const nodeXpByTag = useMemo(() => {
@@ -120,7 +113,10 @@ export function MasteryHelperPage({
 			.filter((item) => item.owned)
 			.map((item) => {
 				const maxLevel = item.maxLevel;
-				const currentLevel = Math.min(maxLevel, getRankFromAffinity(item.xp, false));
+				const currentLevel = Math.min(
+					maxLevel,
+					getRankFromAffinity(item.xp, false),
+				);
 				const remainingMasteryXp = getRemainingMasteryXp(
 					item.xp,
 					maxLevel,
@@ -144,7 +140,10 @@ export function MasteryHelperPage({
 			.map((item) => {
 				const maxLevel =
 					(item as { maxLevel?: number }).maxLevel ?? item.maxLevelCap ?? 30;
-				const currentLevel = Math.min(maxLevel, getRankFromAffinity(item.xp, true));
+				const currentLevel = Math.min(
+					maxLevel,
+					getRankFromAffinity(item.xp, true),
+				);
 				const remainingMasteryXp = getRemainingMasteryXp(
 					item.xp,
 					maxLevel,
@@ -167,8 +166,15 @@ export function MasteryHelperPage({
 			.filter((item) => item.owned)
 			.map((item) => {
 				const maxLevel = 30;
-				const currentLevel = Math.min(maxLevel, getRankFromAffinity(item.xp, false));
-				const remainingMasteryXp = getRemainingMasteryXp(item.xp, maxLevel, false);
+				const currentLevel = Math.min(
+					maxLevel,
+					getRankFromAffinity(item.xp, false),
+				);
+				const remainingMasteryXp = getRemainingMasteryXp(
+					item.xp,
+					maxLevel,
+					false,
+				);
 
 				return {
 					key: `companion:${item.type}`,
@@ -212,7 +218,7 @@ export function MasteryHelperPage({
 	}
 
 	return (
-		<div className="flex h-full min-h-0 flex-col gap-2">
+		<div className="flex flex-col h-full min-h-0 gap-2 pb-2">
 			<Card>
 				<CardContent>
 					<div className="flex items-center gap-3">
@@ -220,7 +226,7 @@ export function MasteryHelperPage({
 							<img
 								src={masteryIconSrc}
 								alt={`Mastery rank ${summary.masteryRank}`}
-								className="h-20 w-20 object-contain"
+								className="object-contain w-20 h-20"
 							/>
 							<div className="absolute inset-0 flex items-end justify-center pb-1 -bottom-2">
 								<span className="rounded bg-background/80 px-1.5 text-sm font-semibold">
@@ -229,7 +235,7 @@ export function MasteryHelperPage({
 							</div>
 						</div>
 
-						<div className="min-w-0 flex-1">
+						<div className="flex-1 min-w-0">
 							<p className="mt-2 text-sm text-muted-foreground">
 								Next Rank Progress
 							</p>
@@ -258,20 +264,20 @@ export function MasteryHelperPage({
 						</CollapsibleTrigger>
 					</CardHeader>
 					<CollapsibleContent>
-						<CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
-							<div className="rounded border p-3">
+						<CardContent className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Warframes</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.warframes)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Primary Weapons</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.primaryWeapons)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">
 									Secondary Weapons
 								</p>
@@ -279,19 +285,19 @@ export function MasteryHelperPage({
 									{formatNumber(summary.categoryXp.secondaryWeapons)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Melee Weapons</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.meleeWeapons)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Missions</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.missions)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">
 									Steel Path Missions
 								</p>
@@ -299,7 +305,7 @@ export function MasteryHelperPage({
 									{formatNumber(summary.categoryXp.steelPathMissions)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">
 									Railjack Intrinsics
 								</p>
@@ -307,7 +313,7 @@ export function MasteryHelperPage({
 									{formatNumber(summary.categoryXp.railjackIntrinsics)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">
 									Drifter Intrinsics
 								</p>
@@ -315,13 +321,13 @@ export function MasteryHelperPage({
 									{formatNumber(summary.categoryXp.drifterIntrinsics)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Sentinels</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.sentinels)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">
 									Sentinel Weapons
 								</p>
@@ -329,37 +335,37 @@ export function MasteryHelperPage({
 									{formatNumber(summary.categoryXp.sentinelWeapons)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Companions</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.companions)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Archwing</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.archwing)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Archgun</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.archgun)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Archmelee</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.archmelee)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Amps</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.amps)}
 								</p>
 							</div>
-							<div className="rounded border p-3">
+							<div className="p-3 border rounded">
 								<p className="text-sm text-muted-foreground">Necramechs</p>
 								<p className="text-lg font-semibold">
 									{formatNumber(summary.categoryXp.necramechs)}
@@ -370,7 +376,7 @@ export function MasteryHelperPage({
 				</Collapsible>
 			</Card>
 
-			<Card className="flex min-h-0 flex-1 flex-col">
+			<Card className="flex flex-col flex-1 min-h-0">
 				<CardHeader>
 					<CardTitle>Owned Items You Can Still Level</CardTitle>
 					<CardDescription>
@@ -378,27 +384,22 @@ export function MasteryHelperPage({
 						{formatNumber(totalLevelableMasteryXp)} potential mastery XP
 					</CardDescription>
 				</CardHeader>
-				<CardContent className="flex min-h-0 flex-1 flex-col">
+				<CardContent className="flex flex-col flex-1 min-h-0">
 					{levelableItems.length > 0 ? (
-						<ScrollArea className="h-full w-full rounded-md">
+						<ScrollArea className="w-full h-full rounded-md">
 							<div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 								{levelableItems.map((item) => (
-									<Card
-										key={item.key}
-										className="py-3 bg-muted/70"
-									>
+									<Card key={item.key} className="py-3 bg-muted/70">
 										<CardContent>
 											<div className="flex items-center justify-between gap-3">
 												<img
 													src={item.imageUrl}
 													alt={item.name}
-													className="h-16 w-16 rounded-md object-cover"
+													className="object-cover w-16 h-16 rounded-md"
 												/>
-												<div className="min-w-0 flex-1">
-													<p className="truncate font-semibold">
-														{item.name}
-														</p>
-													<p className="text-sm text-muted-foreground mt-1">
+												<div className="flex-1 min-w-0">
+													<p className="font-semibold truncate">{item.name}</p>
+													<p className="mt-1 text-sm text-muted-foreground">
 														Level {item.currentLevel} / {item.maxLevel}
 													</p>
 													<p className="text-sm font-semibold">

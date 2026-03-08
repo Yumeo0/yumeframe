@@ -105,6 +105,7 @@ export interface Warframe {
 	imageUrl: string;
 	favorite: boolean;
 	owned: boolean;
+	isSubsumed?: boolean;
 	parts: WarframePart[];
 }
 
