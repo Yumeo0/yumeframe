@@ -16,6 +16,7 @@ function resolveUpdater<T>(value: Updater<T>, previous: T): T {
 export interface AppState {
 	activeTab: AppTab;
 	foundryFilter: FoundryFilter;
+	eeLogPath: string;
 	inventory: string;
 	inventoryLoading: boolean;
 	inventoryError: string;
@@ -31,6 +32,7 @@ export interface AppState {
 export const appStore = new Store<AppState>({
 	activeTab: "foundry",
 	foundryFilter: "warframes",
+	eeLogPath: "",
 	inventory: "",
 	inventoryLoading: false,
 	inventoryError: "",
@@ -63,6 +65,10 @@ export function setAppFoundryFilter(value: FoundryFilter) {
 
 export function setAppInventory(value: Updater<string>) {
 	updateStoreSlice("inventory", value);
+}
+
+export function setAppEeLogPath(value: Updater<string>) {
+	updateStoreSlice("eeLogPath", value);
 }
 
 export function setAppInventoryLoading(value: Updater<boolean>) {

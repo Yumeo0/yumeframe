@@ -13,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            warframe_api::detect_ee_log_path,
             warframe_api::fetch_warframe_inventory,
             warframe_api::fetch_warframe_index,
             warframe_api::fetch_warframe_manifest,

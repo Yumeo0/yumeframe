@@ -1,4 +1,5 @@
 import { useStore } from "@tanstack/react-store";
+import { invoke } from "@tauri-apps/api/core";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FoundryPage } from "@/components/app/FoundryPage";
@@ -17,6 +18,7 @@ import {
 	appStore,
 	setAppActiveTab,
 	setAppCompanions,
+	setAppEeLogPath,
 	setAppRelics,
 	setAppRewardPlatinumFetchedAt,
 	setAppRewardPlatinumValues,
@@ -39,6 +41,7 @@ import type {
 
 const RELIC_PRICE_CACHE_KEY = "yumeframe.relic.price.cache";
 const RELIC_DAILY_MARKET_CACHE_KEY = "yumeframe.relic.daily.market.cache";
+const EE_LOG_PATH_CACHE_KEY = "yumeframe.ee-log.path";
 const WFM_DAILY_MARKET_PRICES_URL =
 	"https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json";
 
@@ -282,11 +285,45 @@ function App() {
 		appStore,
 		(state) => state.rewardPlatinumFetchedAt,
 	);
+	const eeLogPath = useStore(appStore, (state) => state.eeLogPath);
 	const rewardPlatinumValuesRef = useRef<Record<string, number>>({});
 	const rewardPlatinumFetchedAtRef = useRef<Record<string, number>>({});
 	const [dailyMarketPriceLookup, setDailyMarketPriceLookup] =
 		useState<DailyMarketPriceLookup | null>(null);
+	const [eeLogDetectLoading, setEeLogDetectLoading] = useState(false);
 	const error = inventoryError || dataError;
+
+	const persistEeLogPath = useCallback((value: string) => {
+		setAppEeLogPath(value);
+		try {
+			if (value.trim()) {
+				localStorage.setItem(EE_LOG_PATH_CACHE_KEY, value);
+			} else {
+				localStorage.removeItem(EE_LOG_PATH_CACHE_KEY);
+			}
+		} catch (err) {
+			console.error("Failed to persist EE.log path:", err);
+		}
+	}, []);
+
+	const detectEeLogPath = useCallback(async (applyDetected = true) => {
+		setEeLogDetectLoading(true);
+		try {
+			const detectedPath = await invoke<string | null>("detect_ee_log_path");
+			if (!detectedPath) {
+				return null;
+			}
+			if (applyDetected) {
+				persistEeLogPath(detectedPath);
+			}
+			return detectedPath;
+		} catch (err) {
+			console.error("Failed to detect EE.log path:", err);
+			return null;
+		} finally {
+			setEeLogDetectLoading(false);
+		}
+	}, [persistEeLogPath]);
 
 	useEffect(() => {
 		rewardPlatinumValuesRef.current = rewardPlatinumValues;
@@ -295,6 +332,22 @@ function App() {
 	useEffect(() => {
 		rewardPlatinumFetchedAtRef.current = rewardPlatinumFetchedAt;
 	}, [rewardPlatinumFetchedAt]);
+
+	useEffect(() => {
+		let hasSavedPath = false;
+
+		try {
+			const cachedPath = localStorage.getItem(EE_LOG_PATH_CACHE_KEY);
+			if (cachedPath?.trim()) {
+				hasSavedPath = true;
+				setAppEeLogPath(cachedPath);
+			}
+		} catch (err) {
+			console.error("Failed to read cached EE.log path:", err);
+		}
+
+		detectEeLogPath(!hasSavedPath);
+	}, [detectEeLogPath]);
 
 	useEffect(() => {
 		try {
@@ -862,6 +915,10 @@ function App() {
 								error={error}
 								assets={assets}
 								inventory={inventory}
+								eeLogPath={eeLogPath}
+								onEeLogPathChange={persistEeLogPath}
+								onDetectEeLogPath={detectEeLogPath}
+								eeLogDetectLoading={eeLogDetectLoading}
 							/>
 						</div>
 					</ScrollArea>

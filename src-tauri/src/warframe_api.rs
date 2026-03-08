@@ -8,6 +8,170 @@ use sysinfo::System;
 /// Pattern to search for: "?accountId="
 const ACCOUNT_ID_PATTERN: &[u8] = b"?accountId=";
 
+fn existing_file_path(path: PathBuf) -> Option<String> {
+    if path.is_file() {
+        Some(path.to_string_lossy().into_owned())
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn detect_ee_log_path_internal() -> Option<String> {
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let candidate = PathBuf::from(local_app_data).join("Warframe").join("EE.log");
+        if let Some(path) = existing_file_path(candidate) {
+            return Some(path);
+        }
+    }
+
+    if let Ok(user_profile) = std::env::var("USERPROFILE") {
+        let candidate = PathBuf::from(user_profile)
+            .join("AppData")
+            .join("Local")
+            .join("Warframe")
+            .join("EE.log");
+        if let Some(path) = existing_file_path(candidate) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn scan_users_dir_for_ee_log(users_dir: &Path) -> Option<String> {
+    let entries = fs::read_dir(users_dir).ok()?;
+
+    for entry in entries.flatten() {
+        let candidate = entry
+            .path()
+            .join("AppData")
+            .join("Local")
+            .join("Warframe")
+            .join("EE.log");
+        if let Some(path) = existing_file_path(candidate) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn scan_compatdata_root_for_ee_log(root: &Path) -> Option<String> {
+    let entries = fs::read_dir(root).ok()?;
+
+    for entry in entries.flatten() {
+        let pfx = entry.path().join("pfx").join("drive_c");
+
+        let steamuser_candidate = pfx
+            .join("users")
+            .join("steamuser")
+            .join("AppData")
+            .join("Local")
+            .join("Warframe")
+            .join("EE.log");
+        if let Some(path) = existing_file_path(steamuser_candidate) {
+            return Some(path);
+        }
+
+        let users_dir = pfx.join("users");
+        if let Some(path) = scan_users_dir_for_ee_log(&users_dir) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "linux")]
+fn detect_ee_log_path_internal() -> Option<String> {
+    if let Ok(wine_prefix) = std::env::var("WINEPREFIX") {
+        let prefix_root = PathBuf::from(wine_prefix).join("drive_c").join("users");
+        if let Some(path) = scan_users_dir_for_ee_log(&prefix_root) {
+            return Some(path);
+        }
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = PathBuf::from(home);
+        let compatdata_roots = [
+            home_path
+                .join(".steam")
+                .join("steam")
+                .join("steamapps")
+                .join("compatdata"),
+            home_path
+                .join(".local")
+                .join("share")
+                .join("Steam")
+                .join("steamapps")
+                .join("compatdata"),
+            home_path
+                .join(".var")
+                .join("app")
+                .join("com.valvesoftware.Steam")
+                .join(".local")
+                .join("share")
+                .join("Steam")
+                .join("steamapps")
+                .join("compatdata"),
+        ];
+
+        for root in compatdata_roots {
+            if let Some(path) = scan_compatdata_root_for_ee_log(&root) {
+                return Some(path);
+            }
+        }
+
+        let home_windows_like_candidates = [
+            home_path
+                .join(".wine")
+                .join("drive_c")
+                .join("users"),
+            home_path.join("Games").join("drive_c").join("users"),
+        ];
+
+        for candidate in home_windows_like_candidates {
+            if let Some(path) = scan_users_dir_for_ee_log(&candidate) {
+                return Some(path);
+            }
+        }
+    }
+
+    let mount_roots = ["/mnt", "/media", "/run/media"];
+    for mount_root in mount_roots {
+        let top_level_entries = match fs::read_dir(mount_root) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+
+        for mount in top_level_entries.flatten() {
+            let mount_path = mount.path();
+
+            let users_dir_candidates = [mount_path.join("Users"), mount_path.join("users")];
+            for users_dir in users_dir_candidates {
+                if let Some(path) = scan_users_dir_for_ee_log(&users_dir) {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+fn detect_ee_log_path_internal() -> Option<String> {
+    None
+}
+
+#[tauri::command]
+pub fn detect_ee_log_path() -> Option<String> {
+    detect_ee_log_path_internal()
+}
+
 /// Get the cache directory for the app
 fn get_cache_dir() -> Result<PathBuf, String> {
     let dirs = directories::ProjectDirs::from("", "", "YumeFrame")

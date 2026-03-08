@@ -1,4 +1,4 @@
-import { Clipboard, Loader2 } from "lucide-react";
+import { Clipboard, Loader2, Search } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,10 @@ interface SettingsPageProps {
 	error: string;
 	assets: AssetEntry[];
 	inventory: string;
+	eeLogPath: string;
+	onEeLogPathChange: (value: string) => void;
+	onDetectEeLogPath: () => Promise<string | null>;
+	eeLogDetectLoading: boolean;
 }
 
 export function SettingsPage({
@@ -23,9 +27,58 @@ export function SettingsPage({
 	error,
 	assets,
 	inventory,
+	eeLogPath,
+	onEeLogPathChange,
+	onDetectEeLogPath,
+	eeLogDetectLoading,
 }: SettingsPageProps) {
 	return (
 		<div className="flex flex-col gap-2">
+			<Card>
+				<CardHeader>
+					<CardTitle>EE.log Path</CardTitle>
+					<CardDescription>
+						Detected on app start. You can override it manually.
+					</CardDescription>
+				</CardHeader>
+				<CardContent className="flex flex-col gap-3">
+					<div className="flex flex-col gap-2">
+						<label htmlFor="ee-log-path" className="text-sm font-medium">
+							Path
+						</label>
+						<input
+							id="ee-log-path"
+							type="text"
+							value={eeLogPath}
+							onChange={(event) => onEeLogPathChange(event.target.value)}
+							placeholder="Path to EE.log"
+							className="h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono text-foreground shadow-xs"
+						/>
+					</div>
+					<div className="flex items-center gap-2">
+						<Button
+							type="button"
+							size="sm"
+							variant="outline"
+							onClick={() => {
+								void onDetectEeLogPath();
+							}}
+							disabled={eeLogDetectLoading}
+						>
+							{eeLogDetectLoading ? (
+								<Loader2 className="h-4 w-4 animate-spin" />
+							) : (
+								<Search className="h-4 w-4" />
+							)}
+							Auto-detect
+						</Button>
+						<p className="text-xs text-muted-foreground">
+							Windows default: %LOCALAPPDATA%\\Warframe\\EE.log
+						</p>
+					</div>
+				</CardContent>
+			</Card>
+
 			<Card>
 				<CardHeader>
 					<CardTitle>Asset Index</CardTitle>
