@@ -61,7 +61,7 @@ export const appStore = new Store<AppState>({
 	rewardPlatinumFetchedAt: {},
 	relicScannerEnabled: true,
 	relicOverlayEnabled: false,
-	relicScannerHotkey: "F12",
+	relicScannerHotkey: "F11",
 	relicScannerStatus: "stopped",
 	relicScans: [],
 });

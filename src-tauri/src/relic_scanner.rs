@@ -14,7 +14,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Emitter, Manager,
+};
 use xcap::Window;
 
 const DETECTION_MARKERS: [&str; 3] = [
@@ -30,6 +32,8 @@ const PIXEL_REWARD_LINE_HEIGHT: f32 = 48.0;
 
 #[derive(Debug)]
 struct ScannerRuntime {
+    ee_log_path: String,
+    hotkey_binding: Option<String>,
     stop_flag: Arc<AtomicBool>,
     log_handle: JoinHandle<()>,
     hotkey_handle: Option<JoinHandle<()>>,
@@ -48,6 +52,13 @@ struct ScanDebugArtifacts {
 
 static SCANNER_RUNTIME: Mutex<Option<ScannerRuntime>> = Mutex::new(None);
 static SCAN_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+fn normalize_hotkey_binding(hotkey: Option<&str>) -> Option<String> {
+    hotkey
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_ascii_uppercase())
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -432,32 +443,28 @@ fn spawn_hotkey_worker(
         let manager = match GlobalHotKeyManager::new() {
             Ok(manager) => manager,
             Err(err) => {
-                emit_scan_result(
-                    &app,
-                    "hotkey",
-                    Vec::new(),
-                    Vec::new(),
-                    Some(format!("Failed to initialize global hotkey manager: {err}")),
-                );
+                let message = format!("Failed to initialize global hotkey manager: {err}");
+                let _ = app.emit("relic-scanner-error", message.clone());
+                eprintln!("{message}");
                 return;
             }
         };
 
         if let Err(err) = manager.register(hotkey) {
-            emit_scan_result(
-                &app,
-                "hotkey",
-                Vec::new(),
-                Vec::new(),
-                Some(format!("Failed to register global hotkey: {err}")),
-            );
+            let message = format!("Failed to register global hotkey: {err}");
+            let _ = app.emit("relic-scanner-error", message.clone());
+            eprintln!("{message}");
             return;
         }
+
+        // Drop stale key events that may have been queued before registration.
+        while GlobalHotKeyEvent::receiver().try_recv().is_ok() {}
+        let hotkey_ready_at = Instant::now() + Duration::from_millis(500);
 
         while !stop_flag.load(Ordering::Relaxed) {
             match GlobalHotKeyEvent::receiver().try_recv() {
                 Ok(event) => {
-                    if event.state == HotKeyState::Pressed {
+                    if event.state == HotKeyState::Pressed && Instant::now() >= hotkey_ready_at {
                         perform_scan(&app, "hotkey", Vec::new());
                     }
                 }
@@ -477,15 +484,36 @@ pub fn start_relic_scanner(
     ee_log_path: String,
     hotkey: Option<String>,
 ) -> Result<(), String> {
-    if ee_log_path.trim().is_empty() {
+    let normalized_ee_log_path = ee_log_path.trim().to_string();
+    if normalized_ee_log_path.is_empty() {
         return Err("EE.log path is empty".to_string());
+    }
+
+    let normalized_hotkey = normalize_hotkey_binding(hotkey.as_deref());
+
+    {
+        let runtime = SCANNER_RUNTIME
+            .lock()
+            .map_err(|_| "Failed to acquire scanner state lock".to_string())?;
+
+        if let Some(current) = runtime.as_ref() {
+            if current.ee_log_path == normalized_ee_log_path
+                && current.hotkey_binding == normalized_hotkey
+            {
+                return Ok(());
+            }
+        }
     }
 
     stop_relic_scanner_internal()?;
 
     let stop_flag = Arc::new(AtomicBool::new(false));
-    let log_handle = spawn_scanner_worker(app.clone(), ee_log_path, Arc::clone(&stop_flag));
-    let hotkey_handle = if let Some(raw_hotkey) = hotkey {
+    let log_handle = spawn_scanner_worker(
+        app.clone(),
+        normalized_ee_log_path.clone(),
+        Arc::clone(&stop_flag),
+    );
+    let hotkey_handle = if let Some(raw_hotkey) = hotkey.as_deref() {
         let trimmed = raw_hotkey.trim();
         if trimmed.is_empty() {
             None
@@ -506,6 +534,8 @@ pub fn start_relic_scanner(
         .lock()
         .map_err(|_| "Failed to acquire scanner state lock".to_string())?;
     *runtime = Some(ScannerRuntime {
+        ee_log_path: normalized_ee_log_path,
+        hotkey_binding: normalized_hotkey,
         stop_flag,
         log_handle,
         hotkey_handle,
@@ -515,14 +545,11 @@ pub fn start_relic_scanner(
 }
 
 fn stop_relic_scanner_internal() -> Result<(), String> {
-    let runtime = {
-        let mut state = SCANNER_RUNTIME
-            .lock()
-            .map_err(|_| "Failed to acquire scanner state lock".to_string())?;
-        state.take()
-    };
+    let mut state = SCANNER_RUNTIME
+        .lock()
+        .map_err(|_| "Failed to acquire scanner state lock".to_string())?;
 
-    if let Some(runtime) = runtime {
+    if let Some(runtime) = state.take() {
         runtime.stop_flag.store(true, Ordering::Relaxed);
         let _ = runtime.log_handle.join();
         if let Some(hotkey_handle) = runtime.hotkey_handle {
@@ -585,46 +612,25 @@ pub fn trigger_relic_scan_from_image(
 #[tauri::command]
 pub fn set_relic_overlay_enabled(app: AppHandle, enabled: bool) -> Result<(), String> {
     let label = "relic-overlay";
+    let window = app
+        .get_webview_window(label)
+        .ok_or_else(|| format!("Overlay window '{label}' is not configured"))?;
 
     if enabled {
-        if let Some(window) = app.get_webview_window(label) {
-            window
-                .show()
-                .map_err(|err| format!("Failed to show overlay: {err}"))?;
-            window
-                .set_ignore_cursor_events(true)
-                .map_err(|err| format!("Failed to set overlay click-through: {err}"))?;
-            return Ok(());
-        }
-
-        let window = WebviewWindowBuilder::new(
-            &app,
-            label,
-            WebviewUrl::App("index.html#/overlay".into()),
-        )
-        .title("YumeFrame Overlay")
-        .decorations(false)
-        .transparent(true)
-        .always_on_top(true)
-        .focused(false)
-        .resizable(false)
-        .skip_taskbar(true)
-        .fullscreen(true)
-        .build()
-        .map_err(|err| format!("Failed to create overlay window: {err}"))?;
-
         window
             .set_ignore_cursor_events(true)
             .map_err(|err| format!("Failed to set overlay click-through: {err}"))?;
 
+        window
+            .show()
+            .map_err(|err| format!("Failed to show overlay: {err}"))?;
+
         return Ok(());
     }
 
-    if let Some(window) = app.get_webview_window(label) {
-        window
-            .hide()
-            .map_err(|err| format!("Failed to hide overlay: {err}"))?;
-    }
+    window
+        .hide()
+        .map_err(|err| format!("Failed to hide overlay: {err}"))?;
 
     Ok(())
 }

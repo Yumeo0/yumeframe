@@ -14,8 +14,8 @@ interface SidebarProps {
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 	return (
-		<aside className="w-56 border-r bg-card p-2 flex flex-col">
-			<div className="flex items-center gap-3 px-2 py-3 mb-4 justify-center">
+		<aside className="flex w-14 shrink-0 flex-col border-r bg-card p-2 transition-[width] duration-150 md:w-56">
+			<div className="mb-4 flex items-center justify-center gap-3 px-2 py-3 md:justify-start">
 				<span
 					aria-hidden="true"
 					className={`h-8 w-8 shrink-0 bg-foreground`}
@@ -30,15 +30,16 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 						WebkitMaskSize: "contain",
 					}}
 				/>
-				<h1 className="text-2xl font-bold">YumeFrame</h1>
+				<h1 className="hidden text-2xl font-bold md:block">YumeFrame</h1>
 			</div>
 
-			<nav className="flex flex-col justify-between h-full">
+			<nav className="flex h-full flex-col justify-between">
 				<div className="space-y-2">
-					
+
 				<Button
 					variant={activeTab === "foundry" ? "default" : "ghost"}
-					className="w-full justify-start gap-2"
+					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					aria-label="Foundry"
 					onClick={() => onTabChange("foundry")}
 				>
 					<span
@@ -55,11 +56,12 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 							WebkitMaskSize: "contain",
 						}}
 					/>
-					Foundry
+					<span className="hidden md:inline">Foundry</span>
 				</Button>
 				<Button
 					variant={activeTab === "mastery-helper" ? "default" : "ghost"}
-					className="w-full justify-start gap-2"
+					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					aria-label="Mastery Helper"
 					onClick={() => onTabChange("mastery-helper")}
 				>
 					<span
@@ -76,11 +78,12 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 							WebkitMaskSize: "contain",
 						}}
 					/>
-					Mastery Helper
+					<span className="hidden md:inline">Mastery Helper</span>
 				</Button>
 				<Button
 					variant={activeTab === "relic-planner" ? "default" : "ghost"}
-					className="w-full justify-start gap-2"
+					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					aria-label="Relic Planner"
 					onClick={() => onTabChange("relic-planner")}
 				>
 					<span
@@ -97,11 +100,12 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 							WebkitMaskSize: "contain",
 						}}
 					/>
-					Relic Planner
+					<span className="hidden md:inline">Relic Planner</span>
 				</Button>
 				<Button
 					variant={activeTab === "relic-scanner" ? "default" : "ghost"}
-					className="w-full justify-start gap-2"
+					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					aria-label="Relic Scanner"
 					onClick={() => onTabChange("relic-scanner")}
 				>
 					<span
@@ -118,12 +122,13 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 							WebkitMaskSize: "contain",
 						}}
 					/>
-					Relic Scanner
+					<span className="hidden md:inline">Relic Scanner</span>
 				</Button>
 				</div>
 				<Button
 					variant={activeTab === "settings" ? "default" : "ghost"}
-					className="w-full justify-start gap-2"
+					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					aria-label="Settings"
 					onClick={() => onTabChange("settings")}
 				>
 					<span
@@ -140,7 +145,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 							WebkitMaskSize: "contain",
 						}}
 					/>
-					Settings
+					<span className="hidden md:inline">Settings</span>
 				</Button>
 			</nav>
 		</aside>

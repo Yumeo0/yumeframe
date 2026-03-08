@@ -1,11 +1,10 @@
 import { useStore } from "@tanstack/react-store";
 import { invoke } from "@tauri-apps/api/core";
-import { emit, listen } from "@tauri-apps/api/event";
+import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FoundryPage } from "@/components/app/FoundryPage";
 import { MasteryHelperPage } from "@/components/app/MasteryHelperPage";
-import { RelicOverlayWindow } from "@/components/app/RelicOverlayWindow";
 import { RelicPlannerPage } from "@/components/app/RelicPlannerPage";
 import { RelicScannerPage } from "@/components/app/RelicScannerPage";
 import { SettingsPage } from "@/components/app/SettingsPage";
@@ -56,6 +55,8 @@ const RELIC_DAILY_MARKET_CACHE_KEY = "yumeframe.relic.daily.market.cache";
 const RELIC_SCANNER_SETTINGS_CACHE_KEY = "yumeframe.relic.scanner.settings";
 const EE_LOG_PATH_CACHE_KEY = "yumeframe.ee-log.path";
 const RELIC_IMAGE_TEST_PATH_CACHE_KEY = "yumeframe.relic.image-test.path";
+const DEFAULT_RELIC_SCANNER_HOTKEY = "F11";
+const LEGACY_RELIC_SCANNER_HOTKEY = "F12";
 const WFM_DAILY_MARKET_PRICES_URL =
 	"https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json";
 
@@ -80,6 +81,7 @@ interface DailyMarketPriceLookup {
 	fetchedAt: number;
 	pricesBySlug: Record<string, number>;
 	pricesByName: Record<string, number>;
+	slugByName: Record<string, string>;
 }
 
 interface ScannerEventPayload {
@@ -87,6 +89,25 @@ interface ScannerEventPayload {
 	triggeredAt: number;
 	rewardCandidates: string[];
 	logMarkers: string[];
+	error?: string;
+}
+
+interface OverlaySetPiece {
+	rewardName: string;
+	displayName: string;
+	imageUrl: string;
+	ownedCount: number;
+}
+
+interface OverlayRewardValue extends RelicScanRewardValue {
+	setPieces: OverlaySetPiece[];
+}
+
+interface OverlayEventPayload {
+	source: RelicScanTriggerSource;
+	triggeredAt: number;
+	rewardCandidates: string[];
+	rewards?: OverlayRewardValue[];
 	error?: string;
 }
 
@@ -105,25 +126,14 @@ function normalizeRewardGameRef(gameRef: string): string {
 }
 
 function estimateTopOrderPrice(orders: MarketTopOrders): number {
-	const buyOrders = orders.buy ?? [];
 	const sellOrders = orders.sell ?? [];
 
-	const bestBuy = buyOrders.length > 0 ? buyOrders[0].platinum : null;
-	const bestSell = sellOrders.length > 0 ? sellOrders[0].platinum : null;
-
-	if (bestBuy !== null && bestSell !== null) {
-		return Math.round(((bestBuy + bestSell) / 2) * 100) / 100;
+	if (sellOrders.length === 0) {
+		return 0;
 	}
 
-	if (bestSell !== null) {
-		return bestSell;
-	}
-
-	if (bestBuy !== null) {
-		return bestBuy;
-	}
-
-	return 0;
+	const totalSell = sellOrders.reduce((sum, order) => sum + order.platinum, 0);
+	return Math.round((totalSell / sellOrders.length) * 100) / 100;
 }
 
 function getUtcDayKey(dateLike: Date | number | string = Date.now()): string {
@@ -159,6 +169,15 @@ function normalizeOcrText(value: string): string {
 
 	// OCR often appends the reward slot index (1-4) to the end of the line.
 	return normalized.replace(/\b[1-4]$/, "").trim();
+}
+
+function getPrimeSetKey(displayName: string): string | null {
+	const match = displayName.match(/^(.+?\bprime)\b/i);
+	if (!match) {
+		return null;
+	}
+
+	return normalizeOcrText(match[1]);
 }
 
 function levenshteinDistance(a: string, b: string): number {
@@ -207,11 +226,16 @@ function buildDailyMarketPriceLookup(
 ): DailyMarketPriceLookup {
 	const pricesBySlug: Record<string, number> = {};
 	const pricesByName: Record<string, number> = {};
+	const slugByName: Record<string, string> = {};
 
 	for (const item of items) {
 		const price = estimateTopOrderPrice(item.topOrders ?? {});
+		const normalizedName = normalizeMarketName(item.itemName);
 		pricesBySlug[item.slug] = price;
-		pricesByName[normalizeMarketName(item.itemName)] = price;
+		pricesByName[normalizedName] = price;
+		if (!slugByName[normalizedName]) {
+			slugByName[normalizedName] = item.slug;
+		}
 	}
 
 	return {
@@ -219,6 +243,7 @@ function buildDailyMarketPriceLookup(
 		fetchedAt,
 		pricesBySlug,
 		pricesByName,
+		slugByName,
 	};
 }
 
@@ -388,12 +413,23 @@ function AppMain() {
 	const [eeLogDetectLoading, setEeLogDetectLoading] = useState(false);
 	const [relicImageTestPath, setRelicImageTestPath] = useState("");
 	const [relicImageTestLoading, setRelicImageTestLoading] = useState(false);
+	const [scannerSettingsLoaded, setScannerSettingsLoaded] = useState(false);
 	const [latestRewardGuessDebug, setLatestRewardGuessDebug] = useState<
 		RewardGuessDebugEntry[]
 	>([]);
 	const error = inventoryError || dataError;
 
+	const normalizedRelicScannerHotkey = useMemo(() => {
+		const normalized = relicScannerHotkey.trim().toUpperCase();
+		return normalized || DEFAULT_RELIC_SCANNER_HOTKEY;
+	}, [relicScannerHotkey]);
+
 	const scannerRewardLookup = useMemo(() => {
+		const manifestTextureByUniqueName = new Map<string, string>();
+		for (const entry of manifest) {
+			manifestTextureByUniqueName.set(entry.uniqueName, entry.textureLocation);
+		}
+
 		const recipeDisplayNameByUniqueName = new Map<string, string>();
 		for (const recipe of Object.values(recipeData)) {
 			const normalizedRecipeName = normalizeRewardGameRef(recipe.uniqueName);
@@ -417,7 +453,13 @@ function AppMain() {
 
 		const byRewardName = new Map<
 			string,
-			{ rewardName: string; displayName: string; normalizedDisplayName: string }
+			{
+				rewardName: string;
+				displayName: string;
+				normalizedDisplayName: string;
+				setKey: string | null;
+				imageUrl: string;
+			}
 		>();
 
 		for (const relic of Object.values(relicData)) {
@@ -434,11 +476,17 @@ function AppMain() {
 					companionNames[rewardName] ||
 					recipeDisplayNameByUniqueName.get(rewardName) ||
 					getRewardFallbackName(rewardName);
+				const textureLocation = manifestTextureByUniqueName.get(rewardName) || "";
+				const imageUrl = textureLocation
+					? `http://content.warframe.com/PublicExport${textureLocation}`
+					: "";
 
 				byRewardName.set(rewardName, {
 					rewardName,
 					displayName,
 					normalizedDisplayName: normalizeOcrText(displayName),
+					setKey: getPrimeSetKey(displayName),
+					imageUrl,
 				});
 			}
 		}
@@ -448,10 +496,238 @@ function AppMain() {
 		companionNames,
 		recipeData,
 		relicData,
+		manifest,
 		resourceNames,
 		warframeNames,
 		weaponNames,
 	]);
+
+	const scannerRewardByName = useMemo(() => {
+		const byRewardName = new Map<
+			string,
+			{
+				rewardName: string;
+				displayName: string;
+				normalizedDisplayName: string;
+				setKey: string | null;
+				imageUrl: string;
+			}
+		>();
+
+		for (const reward of scannerRewardLookup) {
+			byRewardName.set(reward.rewardName, reward);
+		}
+
+		return byRewardName;
+	}, [scannerRewardLookup]);
+
+	const scannerSetPiecesByKey = useMemo(() => {
+		const byKey = new Map<
+			string,
+			Array<{
+				rewardName: string;
+				displayName: string;
+				imageUrl: string;
+			}>
+		>();
+
+		for (const reward of scannerRewardLookup) {
+			if (!reward.setKey) {
+				continue;
+			}
+
+			const current = byKey.get(reward.setKey) ?? [];
+			current.push({
+				rewardName: reward.rewardName,
+				displayName: reward.displayName,
+				imageUrl: reward.imageUrl,
+			});
+			byKey.set(reward.setKey, current);
+		}
+
+		for (const [key, pieces] of byKey) {
+			pieces.sort((a, b) => a.displayName.localeCompare(b.displayName));
+			byKey.set(key, pieces);
+		}
+
+		return byKey;
+	}, [scannerRewardLookup]);
+
+	const ownedScannerRewardCounts = useMemo(() => {
+		const ownedCounts = new Map<string, number>();
+		if (!inventory?.trim()) {
+			return ownedCounts;
+		}
+
+		try {
+			const inventoryData = JSON.parse(inventory) as Record<string, unknown>;
+			const addOwnedType = (rawType: unknown, count = 1) => {
+				if (typeof rawType !== "string" || !rawType.trim()) {
+					return;
+				}
+				if (count <= 0) {
+					return;
+				}
+
+				const normalized = normalizeRewardGameRef(rawType);
+				const currentCount = ownedCounts.get(normalized) ?? 0;
+				ownedCounts.set(normalized, currentCount + count);
+			};
+
+			const recipeEntries =
+				(inventoryData.Recipes as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+			for (const entry of recipeEntries) {
+				addOwnedType(entry.ItemType, Math.max(1, entry.ItemCount ?? 1));
+			}
+
+			const miscEntries =
+				(inventoryData.MiscItems as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+			for (const entry of miscEntries) {
+				addOwnedType(entry.ItemType, entry.ItemCount ?? 0);
+			}
+
+			const inventoryKeys = [
+				"Suits",
+				"SpaceSuits",
+				"Pistols",
+				"LongGuns",
+				"Melee",
+				"SpaceGuns",
+				"SpaceMelee",
+				"SentinelWeapons",
+				"OperatorAmps",
+				"Sentinels",
+				"KubrowPets",
+				"MoaPets",
+				"InfestedPets",
+			] as const;
+
+			for (const key of inventoryKeys) {
+				const entries =
+					(inventoryData[key] as Array<{ ItemType?: string }> | undefined) ?? [];
+				for (const entry of entries) {
+					addOwnedType(entry.ItemType, 1);
+				}
+			}
+		} catch (err) {
+			console.error("Failed to derive scanner reward owned counts from inventory:", err);
+		}
+
+		return ownedCounts;
+	}, [inventory]);
+
+	const buildOverlayRewards = useCallback(
+		(rewards: RelicScanRewardValue[]): OverlayRewardValue[] => {
+			return rewards.map((reward) => {
+				const lookupReward = scannerRewardByName.get(reward.rewardName);
+				const setPieces =
+					lookupReward?.setKey && scannerSetPiecesByKey.has(lookupReward.setKey)
+						? (scannerSetPiecesByKey.get(lookupReward.setKey) ?? []).map((piece) => ({
+							...piece,
+							ownedCount: ownedScannerRewardCounts.get(piece.rewardName) ?? 0,
+						}))
+						: [
+							{
+								rewardName: reward.rewardName,
+								displayName: reward.displayName,
+								imageUrl: lookupReward?.imageUrl ?? "",
+								ownedCount: ownedScannerRewardCounts.get(reward.rewardName) ?? 0,
+							},
+						];
+
+				return {
+					...reward,
+					setPieces,
+				};
+			});
+		},
+		[ownedScannerRewardCounts, scannerRewardByName, scannerSetPiecesByKey],
+	);
+
+	const scannerDisplayNameByRewardName = useMemo(() => {
+		const byRewardName: Record<string, string> = {};
+		for (const entry of scannerRewardLookup) {
+			byRewardName[entry.rewardName] = entry.displayName;
+		}
+		return byRewardName;
+	}, [scannerRewardLookup]);
+
+	const dailyMarketSlugByRewardName = useMemo(() => {
+		const lookup = dailyMarketPriceLookup;
+		if (!lookup) {
+			return {} as Record<string, string>;
+		}
+
+		const byRewardName: Record<string, string> = {};
+		for (const entry of scannerRewardLookup) {
+			const fallbackName = getRewardFallbackName(entry.rewardName);
+			const candidateNames = new Set<string>([entry.displayName, fallbackName]);
+			if (!/\bblueprint$/i.test(entry.displayName)) {
+				candidateNames.add(`${entry.displayName} Blueprint`);
+			}
+
+			for (const name of candidateNames) {
+				const normalizedName = normalizeMarketName(name);
+				const mappedSlug = lookup.slugByName[normalizedName];
+				if (mappedSlug) {
+					byRewardName[entry.rewardName] = mappedSlug;
+					break;
+				}
+
+				const slug = slugifyMarketName(name);
+				if (lookup.pricesBySlug[slug] !== undefined) {
+					byRewardName[entry.rewardName] = slug;
+					break;
+				}
+			}
+		}
+
+		return byRewardName;
+	}, [dailyMarketPriceLookup, scannerRewardLookup]);
+
+	const getDailyMarketPriceForReward = useCallback(
+		(rewardName: string): number => {
+			const lookup = dailyMarketPriceLookup;
+			if (!lookup) {
+				return 0;
+			}
+
+			const normalizedRewardName = normalizeRewardGameRef(rewardName);
+			const mappedSlug = dailyMarketSlugByRewardName[normalizedRewardName];
+			if (mappedSlug) {
+				return lookup.pricesBySlug[mappedSlug] ?? 0;
+			}
+
+			const displayName =
+				scannerDisplayNameByRewardName[normalizedRewardName] ||
+				resourceNames[normalizedRewardName] ||
+				weaponNames[normalizedRewardName] ||
+				warframeNames[normalizedRewardName] ||
+				companionNames[normalizedRewardName] ||
+				getRewardFallbackName(normalizedRewardName);
+
+			const normalizedDisplayName = normalizeMarketName(displayName);
+			const slugByName = lookup.slugByName[normalizedDisplayName];
+			if (slugByName) {
+				return lookup.pricesBySlug[slugByName] ?? 0;
+			}
+
+			return (
+				lookup.pricesBySlug[slugifyMarketName(displayName)] ??
+				lookup.pricesByName[normalizedDisplayName] ??
+				0
+			);
+		},
+		[
+			companionNames,
+			dailyMarketPriceLookup,
+			dailyMarketSlugByRewardName,
+			resourceNames,
+			scannerDisplayNameByRewardName,
+			warframeNames,
+			weaponNames,
+		],
+	);
 
 	const resolveScannerRewardValues = useCallback(
 		(rewardCandidates: string[]): RelicScanRewardValue[] => {
@@ -461,23 +737,17 @@ function AppMain() {
 			for (const candidate of rewardCandidates) {
 				let normalizedRewardName = normalizeRewardGameRef(candidate);
 				let displayName =
-					resourceNames[normalizedRewardName] ||
-					weaponNames[normalizedRewardName] ||
-					warframeNames[normalizedRewardName] ||
-					companionNames[normalizedRewardName] ||
-					"";
+					scannerDisplayNameByRewardName[normalizedRewardName] || "";
 				let confidence = 1;
 
 				if (!displayName) {
 					const normalizedCandidate = normalizeOcrText(candidate);
-					let best:
-						| {
-								rewardName: string;
-								displayName: string;
-								normalizedDisplayName: string;
-								distance: number;
-						  }
-						| null = null;
+					let best: {
+						rewardName: string;
+						displayName: string;
+						normalizedDisplayName: string;
+						distance: number;
+					} | null = null;
 
 					for (const entry of scannerRewardLookup) {
 						const distance = levenshteinDistance(
@@ -507,7 +777,11 @@ function AppMain() {
 					confidence =
 						1 -
 						best.distance /
-						Math.max(best.normalizedDisplayName.length, normalizedCandidate.length, 1);
+							Math.max(
+								best.normalizedDisplayName.length,
+								normalizedCandidate.length,
+								1,
+							);
 				}
 
 				if (unique.has(normalizedRewardName)) {
@@ -517,11 +791,7 @@ function AppMain() {
 
 				const resolvedDisplayName =
 					displayName || getRewardFallbackName(normalizedRewardName);
-
-				const platinum =
-					rewardPlatinumValuesRef.current[normalizedRewardName] ??
-					rewardPlatinumValuesRef.current[candidate] ??
-					0;
+				const platinum = getDailyMarketPriceForReward(normalizedRewardName);
 				const ducats =
 					recipeDucatValues[normalizedRewardName] ??
 					recipeDucatValues[candidate] ??
@@ -541,12 +811,10 @@ function AppMain() {
 			return values;
 		},
 		[
-			companionNames,
+			getDailyMarketPriceForReward,
 			recipeDucatValues,
-			resourceNames,
+			scannerDisplayNameByRewardName,
 			scannerRewardLookup,
-			warframeNames,
-			weaponNames,
 		],
 	);
 
@@ -580,6 +848,7 @@ function AppMain() {
 		(payload: ScannerEventPayload) => {
 			const rawCandidates = payload.rewardCandidates ?? [];
 			const rewards = resolveScannerRewardValues(rawCandidates);
+			const overlayRewards = buildOverlayRewards(rewards);
 			setLatestRewardGuessDebug(buildRewardGuessDebug(rawCandidates));
 			const status: RelicScanStatus = payload.error
 				? "error"
@@ -598,15 +867,22 @@ function AppMain() {
 			};
 
 			setAppRelicScans((previous) => [entry, ...previous].slice(0, 100));
-			void emit("relic-scan-overlay", {
+			const overlayPayload: OverlayEventPayload = {
 				source: entry.source,
 				triggeredAt: entry.triggeredAt,
 				rewardCandidates: entry.rawCandidates,
-				rewards: entry.rewards,
+				rewards: overlayRewards,
 				error: entry.error,
-			});
+			};
+
+			void emitTo("relic-overlay", "relic-scan-overlay", overlayPayload);
+			void emit("relic-scan-overlay", overlayPayload);
 		},
-		[buildRewardGuessDebug, resolveScannerRewardValues],
+		[
+			buildOverlayRewards,
+			buildRewardGuessDebug,
+			resolveScannerRewardValues,
+		],
 	);
 
 	const persistEeLogPath = useCallback((value: string) => {
@@ -671,7 +947,13 @@ function AppMain() {
 					setAppRelicOverlayEnabled(parsed.relicOverlayEnabled);
 				}
 				if (typeof parsed.relicScannerHotkey === "string") {
-					setAppRelicScannerHotkey(parsed.relicScannerHotkey);
+					const parsedHotkey = parsed.relicScannerHotkey.trim().toUpperCase();
+					// Migrate historical default from F12 to F11 for existing cached settings.
+					const migratedHotkey =
+						parsedHotkey === LEGACY_RELIC_SCANNER_HOTKEY
+							? DEFAULT_RELIC_SCANNER_HOTKEY
+							: parsedHotkey || DEFAULT_RELIC_SCANNER_HOTKEY;
+					setAppRelicScannerHotkey(migratedHotkey);
 				}
 			}
 		} catch (err) {
@@ -689,34 +971,126 @@ function AppMain() {
 		}
 
 		detectEeLogPath(!hasSavedPath);
+		setScannerSettingsLoaded(true);
 	}, [detectEeLogPath]);
 
 	useEffect(() => {
+		if (!scannerSettingsLoaded) {
+			return;
+		}
+
 		try {
 			localStorage.setItem(
 				RELIC_SCANNER_SETTINGS_CACHE_KEY,
 				JSON.stringify({
 					relicScannerEnabled,
 					relicOverlayEnabled,
-					relicScannerHotkey,
+					relicScannerHotkey: normalizedRelicScannerHotkey,
 				}),
 			);
 		} catch (err) {
 			console.error("Failed to persist scanner settings cache:", err);
 		}
-	}, [relicOverlayEnabled, relicScannerEnabled, relicScannerHotkey]);
+	}, [
+		relicOverlayEnabled,
+		relicScannerEnabled,
+		normalizedRelicScannerHotkey,
+		scannerSettingsLoaded,
+	]);
 
 	useEffect(() => {
+		if (!scannerSettingsLoaded) {
+			return;
+		}
+
 		void invoke("set_relic_overlay_enabled", {
 			enabled: relicOverlayEnabled,
 		}).catch((err) => {
-			console.error("Failed to toggle relic overlay window:", err);
+			console.error("Failed to apply relic overlay setting on startup:", err);
 		});
-	}, [relicOverlayEnabled]);
+	}, [relicOverlayEnabled, scannerSettingsLoaded]);
+
+	const handleRelicOverlayEnabledChange = useCallback(
+		async (nextEnabled: boolean) => {
+			if (nextEnabled === relicOverlayEnabled) {
+				return;
+			}
+
+			const confirmed = window.confirm(
+				"Changing the relic overlay setting requires restarting YumeFrame. Restart now?",
+			);
+			if (!confirmed) {
+				return;
+			}
+
+			try {
+				localStorage.setItem(
+					RELIC_SCANNER_SETTINGS_CACHE_KEY,
+					JSON.stringify({
+						relicScannerEnabled,
+						relicOverlayEnabled: nextEnabled,
+						relicScannerHotkey: normalizedRelicScannerHotkey,
+					}),
+				);
+			} catch (err) {
+				console.error("Failed to persist scanner settings before restart:", err);
+			}
+
+			setAppRelicOverlayEnabled(nextEnabled);
+			try {
+				await invoke("restart_app");
+			} catch (err) {
+				console.error("Failed to restart app after overlay setting change:", err);
+			}
+		},
+		[
+			normalizedRelicScannerHotkey,
+			relicOverlayEnabled,
+			relicScannerEnabled,
+		],
+	);
+
+	useEffect(() => {
+		let mounted = true;
+		const unlistenPromise = listen<ScannerEventPayload>(
+			"relic-scan-triggered",
+			(event) => {
+				if (!mounted) {
+					return;
+				}
+				appendScanEntry(event.payload);
+			},
+		);
+
+		return () => {
+			mounted = false;
+			void unlistenPromise.then((unlisten) => {
+				unlisten();
+			});
+		};
+	}, [appendScanEntry]);
+
+	useEffect(() => {
+		let mounted = true;
+		const unlistenPromise = listen<string>("relic-scanner-error", (event) => {
+			if (!mounted) {
+				return;
+			}
+
+			setAppRelicScannerStatus("error");
+			console.error(event.payload);
+		});
+
+		return () => {
+			mounted = false;
+			void unlistenPromise.then((unlisten) => {
+				unlisten();
+			});
+		};
+	}, []);
 
 	useEffect(() => {
 		let isCancelled = false;
-		let unlistenPromise: Promise<() => void> | null = null;
 
 		async function setupScanner() {
 			try {
@@ -728,18 +1102,11 @@ function AppMain() {
 
 				await invoke("start_relic_scanner", {
 					eeLogPath,
-					hotkey: relicScannerHotkey,
+					hotkey: normalizedRelicScannerHotkey,
 				});
 				if (!isCancelled) {
 					setAppRelicScannerStatus("watching");
 				}
-
-				unlistenPromise = listen<ScannerEventPayload>(
-					"relic-scan-triggered",
-					(event) => {
-						appendScanEntry(event.payload);
-					},
-				);
 			} catch (err) {
 				console.error("Failed to initialize relic scanner:", err);
 				if (!isCancelled) {
@@ -753,13 +1120,8 @@ function AppMain() {
 		return () => {
 			isCancelled = true;
 			void invoke("stop_relic_scanner");
-			if (unlistenPromise) {
-				void unlistenPromise.then((unlisten) => {
-					unlisten();
-				});
-			}
 		};
-	}, [appendScanEntry, eeLogPath, relicScannerEnabled, relicScannerHotkey]);
+	}, [eeLogPath, normalizedRelicScannerHotkey, relicScannerEnabled]);
 
 	const runManualRelicScan = useCallback(async () => {
 		await invoke("trigger_relic_scan", { source: "manual" });
@@ -772,6 +1134,12 @@ function AppMain() {
 
 		setRelicImageTestLoading(true);
 		try {
+			try {
+				await invoke("set_relic_overlay_enabled", { enabled: true });
+			} catch (err) {
+				console.error("Failed to show overlay before image test:", err);
+			}
+
 			await invoke("trigger_relic_scan_from_image", {
 				imagePath: relicImageTestPath,
 				source: "image-test",
@@ -874,7 +1242,8 @@ function AppMain() {
 					if (
 						cachedLookup.dayKey === todayKey &&
 						cachedLookup.pricesBySlug &&
-						cachedLookup.pricesByName
+						cachedLookup.pricesByName &&
+						cachedLookup.slugByName
 					) {
 						if (!isCancelled) {
 							setDailyMarketPriceLookup(cachedLookup);
@@ -971,17 +1340,7 @@ function AppMain() {
 
 		for (const rewardName of visibleRewardNames) {
 			const normalizedRewardName = normalizeRewardGameRef(rewardName);
-			const rewardDisplayName =
-				resourceNames[normalizedRewardName] ||
-				weaponNames[normalizedRewardName] ||
-				warframeNames[normalizedRewardName] ||
-				companionNames[normalizedRewardName] ||
-				getRewardFallbackName(normalizedRewardName);
-
-			const directPrice =
-				marketLookup.pricesByName[normalizeMarketName(rewardDisplayName)] ??
-				marketLookup.pricesBySlug[slugifyMarketName(rewardDisplayName)] ??
-				0;
+			const directPrice = getDailyMarketPriceForReward(normalizedRewardName);
 
 			if (nextValues[normalizedRewardName] !== directPrice) {
 				nextValues[normalizedRewardName] = directPrice;
@@ -1005,11 +1364,43 @@ function AppMain() {
 	}, [
 		visibleRewardNames,
 		dailyMarketPriceLookup,
-		warframeNames,
-		weaponNames,
-		companionNames,
-		resourceNames,
+		getDailyMarketPriceForReward,
 	]);
+
+	// if the daily snapshot arrives after we've already recorded scans, re-
+	// resolve their prices and emit updated overlay events so the window can
+	// refresh existing entries (users frequently trigger a scan before the
+	// snapshot has finished loading). we only bother if something actually
+	// changed.
+	useEffect(() => {
+		if (!dailyMarketPriceLookup) {
+			return;
+		}
+
+		setAppRelicScans((previous) => {
+			let changed = false;
+			const updated = previous.map((entry) => {
+				const newRewards = resolveScannerRewardValues(entry.rawCandidates);
+				const overlayRewards = buildOverlayRewards(newRewards);
+				if (
+					newRewards.length !== entry.rewards.length ||
+					newRewards.some((r, i) => r.platinum !== entry.rewards[i]?.platinum)
+				) {
+					changed = true;
+					void emit("relic-scan-overlay", {
+						source: entry.source,
+						triggeredAt: entry.triggeredAt,
+						rewardCandidates: entry.rawCandidates,
+						rewards: overlayRewards,
+						error: entry.error,
+					});
+					return { ...entry, rewards: newRewards };
+				}
+				return entry;
+			});
+			return changed ? updated : previous;
+		});
+	}, [buildOverlayRewards, dailyMarketPriceLookup, resolveScannerRewardValues]);
 
 	const applyInventoryData = useCallback(
 		(result: string) => {
@@ -1198,7 +1589,6 @@ function AppMain() {
 			);
 
 			wfList.sort((a, b) => a.displayName.localeCompare(b.displayName));
-			console.log(wfList);
 			setAppWarframes(wfList);
 
 			const allWeapons: OwnedWeapon[] = Object.entries(weaponData).map(
@@ -1363,7 +1753,7 @@ function AppMain() {
 	return (
 		<div className="flex h-screen overflow-hidden bg-background">
 			<Sidebar activeTab={activeTab} onTabChange={setAppActiveTab} />
-			<main className="flex-1 min-h-0 p-2 pb-0">
+			<main className="flex-1 min-w-0 min-h-0 p-2 pb-0">
 				{activeTab === "foundry" ? (
 					<FoundryPage error={error} onRefresh={refreshInventory} />
 				) : activeTab === "mastery-helper" ? (
@@ -1383,8 +1773,8 @@ function AppMain() {
 						/>
 					</div>
 				) : (
-					<ScrollArea className="h-full">
-						<div className="h-full">
+					<ScrollArea className="h-full min-w-0">
+						<div className="h-full min-w-0">
 							<SettingsPage
 								indexLoading={indexLoading}
 								error={error}
@@ -1397,7 +1787,7 @@ function AppMain() {
 								relicScannerEnabled={relicScannerEnabled}
 								onRelicScannerEnabledChange={setAppRelicScannerEnabled}
 								relicOverlayEnabled={relicOverlayEnabled}
-								onRelicOverlayEnabledChange={setAppRelicOverlayEnabled}
+								onRelicOverlayEnabledChange={handleRelicOverlayEnabledChange}
 								relicScannerHotkey={relicScannerHotkey}
 								onRelicScannerHotkeyChange={setAppRelicScannerHotkey}
 								onManualRelicScan={runManualRelicScan}
@@ -1416,13 +1806,6 @@ function AppMain() {
 }
 
 function App() {
-	const isOverlayWindow =
-		typeof window !== "undefined" && window.location.hash.startsWith("#/overlay");
-
-	if (isOverlayWindow) {
-		return <RelicOverlayWindow />;
-	}
-
 	return <AppMain />;
 }
 

@@ -1,10 +1,16 @@
 mod warframe_api;
 mod relic_scanner;
+use tauri::AppHandle;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    app.request_restart();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -14,6 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            restart_app,
             warframe_api::detect_ee_log_path,
             warframe_api::fetch_warframe_inventory,
             warframe_api::fetch_warframe_index,

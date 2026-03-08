@@ -23,7 +23,7 @@ interface SettingsPageProps {
 	relicScannerEnabled: boolean;
 	onRelicScannerEnabledChange: (value: boolean) => void;
 	relicOverlayEnabled: boolean;
-	onRelicOverlayEnabledChange: (value: boolean) => void;
+	onRelicOverlayEnabledChange: (value: boolean) => Promise<void>;
 	relicScannerHotkey: string;
 	onRelicScannerHotkeyChange: (value: string) => void;
 	onManualRelicScan: () => Promise<void>;
@@ -65,7 +65,7 @@ export function SettingsPage({
 	latestRewardGuessDebug,
 }: SettingsPageProps) {
 	return (
-		<div className="flex flex-col gap-2">
+		<div className="flex flex-col min-w-0 gap-2">
 			<Card>
 				<CardHeader>
 					<CardTitle>Relic Scanner</CardTitle>
@@ -75,7 +75,7 @@ export function SettingsPage({
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4">
 					<div className="grid gap-3 md:grid-cols-2">
-						<label className="flex items-center justify-between rounded border p-3">
+						<label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">Enable Scanner</p>
 								<p className="text-xs text-muted-foreground">
@@ -90,7 +90,7 @@ export function SettingsPage({
 								}
 							/>
 						</label>
-						<label className="flex items-center justify-between rounded border p-3">
+						<label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">Enable Overlay</p>
 								<p className="text-xs text-muted-foreground">
@@ -100,9 +100,9 @@ export function SettingsPage({
 							<input
 								type="checkbox"
 								checked={relicOverlayEnabled}
-								onChange={(event) =>
-									onRelicOverlayEnabledChange(event.target.checked)
-								}
+								onChange={(event) => {
+									void onRelicOverlayEnabledChange(event.target.checked);
+								}}
 							/>
 						</label>
 					</div>
@@ -117,11 +117,11 @@ export function SettingsPage({
 							onChange={(event) =>
 								onRelicScannerHotkeyChange(event.target.value.toUpperCase())
 							}
-							placeholder="F12"
-							className="h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono text-foreground shadow-xs"
+							placeholder="F11"
+							className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
 						/>
 					</div>
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap items-center gap-2">
 						<Button
 							type="button"
 							size="sm"
@@ -153,7 +153,7 @@ export function SettingsPage({
 							value={eeLogPath}
 							onChange={(event) => onEeLogPathChange(event.target.value)}
 							placeholder="Path to EE.log"
-							className="h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono text-foreground shadow-xs"
+							className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
 						/>
 					</div>
 					<div className="flex items-center gap-2">
@@ -167,13 +167,13 @@ export function SettingsPage({
 							disabled={eeLogDetectLoading}
 						>
 							{eeLogDetectLoading ? (
-								<Loader2 className="h-4 w-4 animate-spin" />
+								<Loader2 className="w-4 h-4 animate-spin" />
 							) : (
-								<Search className="h-4 w-4" />
+								<Search className="w-4 h-4" />
 							)}
 							Auto-detect
 						</Button>
-						<p className="text-xs text-muted-foreground">
+						<p className="text-xs break-all text-muted-foreground">
 							Windows default: %LOCALAPPDATA%\\Warframe\\EE.log
 						</p>
 					</div>
@@ -188,12 +188,12 @@ export function SettingsPage({
 					</CardDescription>
 				</CardHeader>
 				<CardContent className="flex flex-col gap-4">
-					<div className="rounded border p-3">
+					<div className="p-3 border rounded">
 						<p className="text-sm font-medium">Relic Reward Image Test</p>
 						<p className="text-xs text-muted-foreground">
 							Run the relic OCR pipeline against a local screenshot file.
 						</p>
-						<div className="mt-2 flex flex-col gap-2">
+						<div className="flex flex-col gap-2 mt-2">
 							<input
 								type="text"
 								value={relicTestImagePath}
@@ -201,7 +201,7 @@ export function SettingsPage({
 									onRelicTestImagePathChange(event.target.value)
 								}
 								placeholder="Path to reward screenshot image"
-								className="h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono text-foreground shadow-xs"
+								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
 							/>
 							<div className="flex items-center gap-2">
 								<Button
@@ -214,7 +214,7 @@ export function SettingsPage({
 									}}
 								>
 									{relicImageTestLoading ? (
-										<Loader2 className="h-4 w-4 animate-spin" />
+										<Loader2 className="w-4 h-4 animate-spin" />
 									) : null}
 									Run image test
 								</Button>
@@ -222,29 +222,29 @@ export function SettingsPage({
 						</div>
 					</div>
 
-					<div className="rounded border p-3">
+					<div className="p-3 border rounded">
 						<p className="text-sm font-medium">Scanner OCR Debug</p>
 						<p className="text-xs text-muted-foreground">
 							Shows each OCR reward token and the top 3 fuzzy-match guesses.
 						</p>
 						{latestRewardGuessDebug.length > 0 ? (
-							<div className="mt-2 space-y-2">
+							<div className="min-w-0 mt-2 space-y-2">
 								{latestRewardGuessDebug.map((entry, index) => (
 									<div
 										key={`${entry.candidate}-${index}`}
-										className="rounded border bg-muted/30 p-2"
+										className="min-w-0 p-2 border rounded bg-muted/30"
 									>
-										<p className="text-xs font-mono text-foreground">
+										<p className="font-mono text-xs text-foreground wrap-break-word">
 											OCR: {entry.candidate}
 										</p>
-										<p className="text-[11px] text-muted-foreground">
+										<p className="text-[11px] text-muted-foreground wrap-break-word">
 											normalized: {entry.normalizedCandidate || "(empty)"}
 										</p>
 										<ul className="mt-1 space-y-1 text-[11px] font-mono text-muted-foreground">
 											{entry.guesses.map((guess) => (
 												<li
 													key={`${entry.candidate}-${guess.rewardName}`}
-													className="truncate"
+													className="wrap-break-word"
 												>
 													{guess.displayName} (dist {guess.distance})
 												</li>
@@ -260,11 +260,11 @@ export function SettingsPage({
 						)}
 					</div>
 
-					<div className="rounded border p-3">
+					<div className="p-3 border rounded">
 						<p className="mb-2 text-sm font-medium">Asset Index</p>
 						{indexLoading && (
 							<div className="flex items-center gap-2">
-								<Loader2 className="h-4 w-4 animate-spin" />
+								<Loader2 className="w-4 h-4 animate-spin" />
 								Loading asset index...
 							</div>
 						)}
@@ -275,18 +275,18 @@ export function SettingsPage({
 							</Alert>
 						)}
 						{assets.length > 0 && (
-							<Card className="rounded-lg border bg-muted/50 p-4 max-w-md">
-								<ul className="space-y-2 text-xs font-mono">
+							<Card className="max-w-md min-w-0 p-4 border rounded-lg bg-muted/50">
+								<ul className="space-y-2 font-mono text-xs">
 									{assets.map((asset) => (
 										<li
 											key={`${asset.filename}-${asset.hash}`}
-											className="flex items-center justify-between gap-2"
+											className="flex items-start justify-between min-w-0 gap-2"
 										>
-											<span className="truncate text-foreground">
+											<span className="min-w-0 truncate text-foreground">
 												{asset.filename}
 											</span>
-											<span className="text-muted-foreground truncate">
-												→&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{asset.hash}
+											<span className="text-right max-w-1/2 text-muted-foreground wrap-break-word">
+												{`-> ${asset.hash}`}
 											</span>
 										</li>
 									))}
@@ -295,8 +295,8 @@ export function SettingsPage({
 						)}
 					</div>
 
-					<div className="rounded border p-3">
-						<div className="mb-2 flex items-center justify-between">
+					<div className="p-3 border rounded">
+						<div className="flex flex-wrap items-center justify-between gap-2 mb-2">
 							<div>
 								<p className="text-sm font-medium">Inventory Data</p>
 								<p className="text-xs text-muted-foreground">Raw inventory JSON</p>
@@ -312,15 +312,15 @@ export function SettingsPage({
 									}
 									title="Copy to clipboard"
 								>
-									<Clipboard className="h-4 w-4" />
+									<Clipboard className="w-4 h-4" />
 									Copy
 								</Button>
 							)}
 						</div>
 						{inventory ? (
-							<ScrollArea className="h-96 w-full rounded-lg border bg-muted/50">
+							<ScrollArea className="w-full min-w-0 border rounded-lg h-96 bg-muted/50">
 								<div className="p-4">
-									<pre className="max-w-full whitespace-pre-wrap wrap-break-word text-xs font-mono text-foreground">
+									<pre className="max-w-full font-mono text-xs whitespace-pre-wrap wrap-break-word text-foreground">
 										{JSON.stringify(JSON.parse(inventory), null, 2)}
 									</pre>
 								</div>

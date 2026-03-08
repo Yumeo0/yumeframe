@@ -35,4 +35,12 @@ export default defineConfig(async () => ({
 			"@": path.resolve(__dirname, "./src"),
 		},
 	},
+	build: {
+		rollupOptions: {
+			input: {
+				main: path.resolve(__dirname, "index.html"),
+				overlay: path.resolve(__dirname, "overlay.html"),
+			},
+		},
+	},
 }));
