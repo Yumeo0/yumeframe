@@ -10,6 +10,7 @@ interface OverlaySetPiece {
 }
 
 interface OverlayRewardValue extends RelicScanRewardValue {
+	position?: 1 | 2 | 3 | 4;
 	setPieces?: OverlaySetPiece[];
 }
 
@@ -72,15 +73,72 @@ export function RelicOverlayWindow() {
 					<p className="text-base text-red-300">{payload.error}</p>
 				) : payload?.rewards?.length ? (
 					<div className="grid grid-cols-4 gap-3">
-						{payload.rewards.slice(0, 4).map((reward) => {
-							const setPieces = reward.setPieces ?? [];
+						{(() => {
+							const rewardNameCounts = new Map<string, number>();
+							for (const reward of payload.rewards) {
+								rewardNameCounts.set(
+									reward.rewardName,
+									(rewardNameCounts.get(reward.rewardName) ?? 0) + 1,
+								);
+							}
+
+							const positionedRewards: Array<OverlayRewardValue | null> = [
+								null,
+								null,
+								null,
+								null,
+							];
+							const unpositionedRewards: OverlayRewardValue[] = [];
+
+							for (const reward of payload.rewards) {
+								const slotIndex =
+									typeof reward.position === "number"
+										? reward.position - 1
+										: -1;
+
+								if (
+									slotIndex >= 0 &&
+									slotIndex < 4 &&
+									positionedRewards[slotIndex] === null
+								) {
+									positionedRewards[slotIndex] = reward;
+								} else {
+									unpositionedRewards.push(reward);
+								}
+							}
+
+							for (let index = 0; index < 4 && unpositionedRewards.length > 0; index += 1) {
+								if (positionedRewards[index] === null) {
+									const nextReward = unpositionedRewards.shift();
+									if (nextReward) {
+										positionedRewards[index] = nextReward;
+									}
+								}
+							}
+
+							return positionedRewards.map((reward, slotIndex) => {
+								if (!reward) {
+									return (
+										<div
+											key={`${payload.triggeredAt}-empty-${slotIndex}`}
+											className="px-3 py-3 border rounded border-white/10 bg-white/5"
+										/>
+									);
+								}
+
+								const setPieces = reward.setPieces ?? [];
+								const duplicateCount = rewardNameCounts.get(reward.rewardName) ?? 1;
+								const rewardTitle =
+									duplicateCount > 1
+										? `${duplicateCount}x ${reward.displayName}`
+										: reward.displayName;
 
 							return (
 								<div
-									key={`${payload.triggeredAt}-${reward.rewardName}`}
+									key={`${payload.triggeredAt}-${slotIndex}-${reward.rewardName}`}
 									className="px-3 py-3 text-center border rounded border-white/20 bg-white/10"
 								>
-									<p className="text-lg font-semibold leading-tight">{reward.displayName}</p>
+									<p className="text-lg font-semibold leading-tight">{rewardTitle}</p>
 									<div className="flex items-center justify-center gap-4 mt-2 text-lg text-white/90">
 										<span className="inline-flex items-center gap-1">
 											<img alt="Platinum" className="size-6" src="/PlatinumLarge.png" />
@@ -106,7 +164,7 @@ export function RelicOverlayWindow() {
 																className={`w-16 aspect-square rounded object-cover ${piece.ownedCount > 0 ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
 																src={piece.imageUrl}
 															/>
-															<span className="absolute -bottom-1 left-1/2 min-w-5 h-5 px-1 rounded bg-secondary text-secondary-foreground text-[10px] flex items-center justify-center -translate-x-1/2">
+															<span className="absolute -bottom-1 left-1/2 min-w-5 h-5 px-1 rounded bg-secondary text-secondary-foreground text-[16px] flex items-center justify-center -translate-x-1/2">
 																x{piece.ownedCount}
 															</span>
 															<span className="absolute px-2 py-1 mb-2 text-xs transition-opacity transform -translate-x-1/2 rounded opacity-0 pointer-events-none bottom-full left-1/2 bg-popover text-popover-foreground whitespace-nowrap group-hover:opacity-100">
@@ -120,7 +178,8 @@ export function RelicOverlayWindow() {
 									) : null}
 								</div>
 							);
-						})}
+							});
+						})()}
 					</div>
 				) : payload ? (
 					<div className="mt-2 space-y-1">

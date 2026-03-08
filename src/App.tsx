@@ -68,6 +68,7 @@ interface MarketTopOrders {
 interface DailyMarketPriceItem {
 	slug: string;
 	itemName: string;
+	vaulted?: boolean;
 	topOrders?: MarketTopOrders;
 }
 
@@ -82,6 +83,8 @@ interface DailyMarketPriceLookup {
 	pricesBySlug: Record<string, number>;
 	pricesByName: Record<string, number>;
 	slugByName: Record<string, string>;
+	vaultedBySlug: Record<string, boolean>;
+	vaultedByName: Record<string, boolean>;
 }
 
 interface ScannerEventPayload {
@@ -227,12 +230,16 @@ function buildDailyMarketPriceLookup(
 	const pricesBySlug: Record<string, number> = {};
 	const pricesByName: Record<string, number> = {};
 	const slugByName: Record<string, string> = {};
+	const vaultedBySlug: Record<string, boolean> = {};
+	const vaultedByName: Record<string, boolean> = {};
 
 	for (const item of items) {
 		const price = estimateTopOrderPrice(item.topOrders ?? {});
 		const normalizedName = normalizeMarketName(item.itemName);
 		pricesBySlug[item.slug] = price;
 		pricesByName[normalizedName] = price;
+		vaultedBySlug[item.slug] = item.vaulted === true;
+		vaultedByName[normalizedName] = item.vaulted === true;
 		if (!slugByName[normalizedName]) {
 			slugByName[normalizedName] = item.slug;
 		}
@@ -244,6 +251,8 @@ function buildDailyMarketPriceLookup(
 		pricesBySlug,
 		pricesByName,
 		slugByName,
+		vaultedBySlug,
+		vaultedByName,
 	};
 }
 
@@ -731,10 +740,9 @@ function AppMain() {
 
 	const resolveScannerRewardValues = useCallback(
 		(rewardCandidates: string[]): RelicScanRewardValue[] => {
-			const unique = new Set<string>();
 			const values: RelicScanRewardValue[] = [];
 
-			for (const candidate of rewardCandidates) {
+			for (const [index, candidate] of rewardCandidates.entries()) {
 				let normalizedRewardName = normalizeRewardGameRef(candidate);
 				let displayName =
 					scannerDisplayNameByRewardName[normalizedRewardName] || "";
@@ -742,6 +750,25 @@ function AppMain() {
 
 				if (!displayName) {
 					const normalizedCandidate = normalizeOcrText(candidate);
+					const containsMatches = scannerRewardLookup.filter(
+						(entry) =>
+							normalizedCandidate.includes(entry.normalizedDisplayName) ||
+							entry.normalizedDisplayName.includes(normalizedCandidate),
+					);
+
+					if (containsMatches.length > 0) {
+						const bestContains = containsMatches.sort(
+							(a, b) => b.normalizedDisplayName.length - a.normalizedDisplayName.length,
+						)[0];
+
+						normalizedRewardName = bestContains.rewardName;
+						displayName = bestContains.displayName;
+						confidence = Math.max(
+							0.65,
+							bestContains.normalizedDisplayName.length /
+								Math.max(normalizedCandidate.length, 1),
+						);
+					} else {
 					let best: {
 						rewardName: string;
 						displayName: string;
@@ -759,35 +786,31 @@ function AppMain() {
 						}
 					}
 
-					if (!best) {
-						continue;
+						if (!best) {
+							continue;
+						}
+
+						const threshold = Math.max(
+							3,
+							Math.floor(best.normalizedDisplayName.length / 3),
+						);
+
+						if (best.distance > threshold) {
+							continue;
+						}
+
+						normalizedRewardName = best.rewardName;
+						displayName = best.displayName;
+						confidence =
+							1 -
+							best.distance /
+								Math.max(
+									best.normalizedDisplayName.length,
+									normalizedCandidate.length,
+									1,
+								);
 					}
-
-					const threshold = Math.max(
-						3,
-						Math.floor(best.normalizedDisplayName.length / 3),
-					);
-
-					if (best.distance > threshold) {
-						continue;
-					}
-
-					normalizedRewardName = best.rewardName;
-					displayName = best.displayName;
-					confidence =
-						1 -
-						best.distance /
-							Math.max(
-								best.normalizedDisplayName.length,
-								normalizedCandidate.length,
-								1,
-							);
 				}
-
-				if (unique.has(normalizedRewardName)) {
-					continue;
-				}
-				unique.add(normalizedRewardName);
 
 				const resolvedDisplayName =
 					displayName || getRewardFallbackName(normalizedRewardName);
@@ -800,6 +823,8 @@ function AppMain() {
 				values.push({
 					rewardName: normalizedRewardName,
 					displayName: resolvedDisplayName,
+					position:
+						index >= 0 && index < 4 ? ((index + 1) as 1 | 2 | 3 | 4) : undefined,
 					platinum,
 					ducats,
 					confidence,
@@ -1243,7 +1268,9 @@ function AppMain() {
 						cachedLookup.dayKey === todayKey &&
 						cachedLookup.pricesBySlug &&
 						cachedLookup.pricesByName &&
-						cachedLookup.slugByName
+						cachedLookup.slugByName &&
+						cachedLookup.vaultedBySlug &&
+						cachedLookup.vaultedByName
 					) {
 						if (!isCancelled) {
 							setDailyMarketPriceLookup(cachedLookup);

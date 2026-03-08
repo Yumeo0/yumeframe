@@ -599,6 +599,7 @@ export type RelicScanStatus =
 export interface RelicScanRewardValue {
 	rewardName: string;
 	displayName: string;
+	position?: 1 | 2 | 3 | 4;
 	platinum: number;
 	ducats: number;
 	confidence: number;
