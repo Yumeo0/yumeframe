@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use sysinfo::System;
+use tauri::{AppHandle, Manager};
 
 /// Pattern to search for: "?accountId="
 const ACCOUNT_ID_PATTERN: &[u8] = b"?accountId=";
@@ -173,10 +174,11 @@ pub fn detect_ee_log_path() -> Option<String> {
 }
 
 /// Get the cache directory for the app
-fn get_cache_dir() -> Result<PathBuf, String> {
-    let dirs = directories::ProjectDirs::from("", "", "YumeFrame")
-        .ok_or("Failed to determine cache directory")?;
-    let cache_dir = dirs.cache_dir().to_path_buf();
+fn get_cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|err| format!("Failed to resolve app cache dir: {err}"))?;
 
     // Create cache directory if it doesn't exist
     fs::create_dir_all(&cache_dir)
@@ -187,8 +189,8 @@ fn get_cache_dir() -> Result<PathBuf, String> {
 
 /// Load cached asset entries
 #[allow(dead_code)]
-fn load_cached_assets() -> Result<Vec<AssetEntry>, String> {
-    let cache_dir = get_cache_dir()?;
+fn load_cached_assets(app: &AppHandle) -> Result<Vec<AssetEntry>, String> {
+    let cache_dir = get_cache_dir(app)?;
     let cache_file = cache_dir.join("assets.json");
 
     if !cache_file.exists() {
@@ -202,8 +204,8 @@ fn load_cached_assets() -> Result<Vec<AssetEntry>, String> {
 }
 
 /// Save asset entries to cache
-fn save_cached_assets(assets: &[AssetEntry]) -> Result<(), String> {
-    let cache_dir = get_cache_dir()?;
+fn save_cached_assets(app: &AppHandle, assets: &[AssetEntry]) -> Result<(), String> {
+    let cache_dir = get_cache_dir(app)?;
     let cache_file = cache_dir.join("assets.json");
 
     let data =
@@ -215,8 +217,8 @@ fn save_cached_assets(assets: &[AssetEntry]) -> Result<(), String> {
 }
 
 /// Load cached authz string
-fn load_cached_authz() -> Option<String> {
-    let cache_dir = get_cache_dir().ok()?;
+fn load_cached_authz(app: &AppHandle) -> Option<String> {
+    let cache_dir = get_cache_dir(app).ok()?;
     let cache_file = cache_dir.join("authz.txt");
 
     if cache_file.exists() {
@@ -227,8 +229,8 @@ fn load_cached_authz() -> Option<String> {
 }
 
 /// Save authz string to cache
-fn save_cached_authz(authz: &str) -> Result<(), String> {
-    let cache_dir = get_cache_dir()?;
+fn save_cached_authz(app: &AppHandle, authz: &str) -> Result<(), String> {
+    let cache_dir = get_cache_dir(app)?;
     let cache_file = cache_dir.join("authz.txt");
 
     fs::write(&cache_file, authz).map_err(|e| format!("Failed to cache authz: {}", e))?;
@@ -237,8 +239,8 @@ fn save_cached_authz(authz: &str) -> Result<(), String> {
 }
 
 /// Clear cached authz (called when it becomes invalid)
-fn clear_cached_authz() {
-    if let Ok(cache_dir) = get_cache_dir() {
+fn clear_cached_authz(app: &AppHandle) {
+    if let Ok(cache_dir) = get_cache_dir(app) {
         let cache_file = cache_dir.join("authz.txt");
         let _ = fs::remove_file(cache_file);
     }
@@ -517,9 +519,10 @@ fn try_fetch_inventory(authz: &str) -> Result<String, String> {
 
 /// Tauri command to fetch Warframe inventory
 #[tauri::command]
-pub fn fetch_warframe_inventory() -> Result<String, String> {
+pub fn fetch_warframe_inventory(app: AppHandle) -> Result<String, String> {
+    let app_handle = app;
     // First, try to use cached authz if available
-    if let Some(cached_authz) = load_cached_authz() {
+    if let Some(cached_authz) = load_cached_authz(&app_handle) {
         println!("Trying cached authz...");
         match try_fetch_inventory(&cached_authz) {
             Ok(inventory) => {
@@ -528,7 +531,7 @@ pub fn fetch_warframe_inventory() -> Result<String, String> {
             }
             Err(e) => {
                 println!("Cached authz failed ({}), will gruzzle fresh authz...", e);
-                clear_cached_authz();
+                clear_cached_authz(&app_handle);
             }
         }
     }
@@ -551,7 +554,7 @@ pub fn fetch_warframe_inventory() -> Result<String, String> {
     println!("{}", authz);
 
     // Cache the new authz for future use
-    if let Err(e) = save_cached_authz(&authz) {
+    if let Err(e) = save_cached_authz(&app_handle, &authz) {
         println!("Warning: Failed to cache authz: {}", e);
     }
 
@@ -566,7 +569,8 @@ pub fn fetch_warframe_inventory() -> Result<String, String> {
 
 /// Fetch and decompress the Warframe asset index
 #[tauri::command]
-pub async fn fetch_warframe_index() -> Result<Vec<AssetEntry>, String> {
+pub async fn fetch_warframe_index(app: AppHandle) -> Result<Vec<AssetEntry>, String> {
+    let app_handle = app;
     println!("Fetching Warframe asset index...");
 
     let url = "https://origin.warframe.com/PublicExport/index_en.txt.lzma";
@@ -624,14 +628,18 @@ pub async fn fetch_warframe_index() -> Result<Vec<AssetEntry>, String> {
     println!("Parsed {} asset entries", assets.len());
 
     // Cache the assets
-    save_cached_assets(&assets)?;
+    save_cached_assets(&app_handle, &assets)?;
 
     Ok(assets)
 }
 
 /// Check if manifest has changed and download if needed
 #[tauri::command]
-pub async fn fetch_warframe_manifest(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_warframe_manifest(
+    app: AppHandle,
+    assets: Vec<AssetEntry>,
+) -> Result<String, String> {
+    let app_handle = app;
     println!("Checking manifest...");
 
     // Find the ExportManifest entry
@@ -641,7 +649,7 @@ pub async fn fetch_warframe_manifest(assets: Vec<AssetEntry>) -> Result<String, 
         .ok_or("ExportManifest.json not found in asset list")?;
 
     let hash = &manifest_entry.hash;
-    let cache_dir = get_cache_dir()?;
+    let cache_dir = get_cache_dir(&app_handle)?;
     let manifest_hash_file = cache_dir.join("manifest_hash.txt");
     let manifest_file = cache_dir.join("ExportManifest.json");
 
@@ -706,8 +714,12 @@ pub async fn fetch_warframe_manifest(assets: Vec<AssetEntry>) -> Result<String, 
 }
 
 /// Generic function to download and cache an asset file if hash changed
-async fn download_and_cache_asset(filename: &str, hash: &str) -> Result<String, String> {
-    let cache_dir = get_cache_dir()?;
+async fn download_and_cache_asset(
+    app: &AppHandle,
+    filename: &str,
+    hash: &str,
+) -> Result<String, String> {
+    let cache_dir = get_cache_dir(app)?;
     let asset_hash_file = cache_dir.join(format!("{}.hash", filename));
     let asset_file = cache_dir.join(filename);
 
@@ -771,79 +783,96 @@ async fn download_and_cache_asset(filename: &str, hash: &str) -> Result<String, 
 
 /// Fetch warframe data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_warframe_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_warframe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let warframe_asset = assets
         .iter()
         .find(|e| e.filename == "ExportWarframes_en.json")
         .ok_or("ExportWarframes_en.json not found in asset list")?;
 
-    let content = download_and_cache_asset("ExportWarframes_en.json", &warframe_asset.hash).await?;
+    let content =
+        download_and_cache_asset(&app_handle, "ExportWarframes_en.json", &warframe_asset.hash)
+            .await?;
     println!("Fetched ExportWarframes_en.json");
     Ok(content)
 }
 
 /// Fetch weapon data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_weapon_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_weapon_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let weapon_asset = assets
         .iter()
         .find(|e| e.filename == "ExportWeapons_en.json")
         .ok_or("ExportWeapons_en.json not found in asset list")?;
 
-    let content = download_and_cache_asset("ExportWeapons_en.json", &weapon_asset.hash).await?;
+    let content =
+        download_and_cache_asset(&app_handle, "ExportWeapons_en.json", &weapon_asset.hash)
+            .await?;
     println!("Fetched ExportWeapons_en.json");
     Ok(content)
 }
 
 /// Fetch recipe data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_recipe_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_recipe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let recipe_asset = assets
         .iter()
         .find(|e| e.filename == "ExportRecipes_en.json")
         .ok_or("ExportRecipes_en.json not found in asset list")?;
 
-    let content = download_and_cache_asset("ExportRecipes_en.json", &recipe_asset.hash).await?;
+    let content =
+        download_and_cache_asset(&app_handle, "ExportRecipes_en.json", &recipe_asset.hash)
+            .await?;
     println!("Fetched ExportRecipes_en.json");
     Ok(content)
 }
 
 /// Fetch resource data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_resource_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_resource_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let resource_asset = assets
         .iter()
         .find(|e| e.filename == "ExportResources_en.json")
         .ok_or("ExportResources_en.json not found in asset list")?;
 
-    let content = download_and_cache_asset("ExportResources_en.json", &resource_asset.hash).await?;
+    let content =
+        download_and_cache_asset(&app_handle, "ExportResources_en.json", &resource_asset.hash)
+            .await?;
     println!("Fetched ExportResources_en.json");
     Ok(content)
 }
 
 /// Fetch companion data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_companion_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_companion_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let companion_asset = assets
         .iter()
         .find(|e| e.filename == "ExportSentinels_en.json")
         .ok_or("ExportSentinels_en.json not found in asset list")?;
 
     let content =
-        download_and_cache_asset("ExportSentinels_en.json", &companion_asset.hash).await?;
+        download_and_cache_asset(&app_handle, "ExportSentinels_en.json", &companion_asset.hash)
+            .await?;
     println!("Fetched ExportSentinels_en.json");
     Ok(content)
 }
 
 /// Fetch relic data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_relic_data(assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_relic_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    let app_handle = app;
     let relic_asset = assets
         .iter()
         .find(|e| e.filename == "ExportRelicArcane_en.json")
         .ok_or("ExportRelicArcane_en.json not found in asset list")?;
 
-    let content = download_and_cache_asset("ExportRelicArcane_en.json", &relic_asset.hash).await?;
+    let content =
+        download_and_cache_asset(&app_handle, "ExportRelicArcane_en.json", &relic_asset.hash)
+            .await?;
     println!("Fetched ExportRelicArcane_en.json");
     Ok(content)
 }

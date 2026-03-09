@@ -100,11 +100,14 @@ fn preprocess_image(image: &DynamicImage) -> GrayImage {
     threshold(&grayscale, 128, ThresholdType::Binary)
 }
 
-fn create_scan_debug_artifacts(app: &AppHandle, source: &str) -> Result<ScanDebugArtifacts, String> {
-    let cache_dir = app
-        .path()
+fn resolve_cache_root(_app: &AppHandle) -> Result<PathBuf, String> {
+    _app.path()
         .app_cache_dir()
-        .map_err(|err| format!("Failed to resolve app cache dir: {err}"))?;
+        .map_err(|err| format!("Failed to resolve app cache dir: {err}"))
+}
+
+fn create_scan_debug_artifacts(app: &AppHandle, source: &str) -> Result<ScanDebugArtifacts, String> {
+    let cache_dir = resolve_cache_root(app)?;
     let root = cache_dir.join("relic-scanner-debug");
     let scan_dir = root.join(format!("{}-{}", now_ms(), source));
 
