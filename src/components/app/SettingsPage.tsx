@@ -14,6 +14,10 @@ import type { AssetEntry } from "@/types";
 
 interface SettingsPageProps {
 	activeSection: SettingsSection;
+	inventoryAutoRefreshEnabled: boolean;
+	onInventoryAutoRefreshEnabledChange: (value: boolean) => void;
+	inventoryAutoRefreshIntervalSeconds: number;
+	onInventoryAutoRefreshIntervalSecondsChange: (value: number) => void;
 	indexLoading: boolean;
 	error: string;
 	assets: AssetEntry[];
@@ -46,6 +50,10 @@ interface SettingsPageProps {
 
 export function SettingsPage({
 	activeSection,
+	inventoryAutoRefreshEnabled,
+	onInventoryAutoRefreshEnabledChange,
+	inventoryAutoRefreshIntervalSeconds,
+	onInventoryAutoRefreshIntervalSecondsChange,
 	indexLoading,
 	error,
 	assets,
@@ -68,6 +76,7 @@ export function SettingsPage({
 	latestRewardGuessDebug,
 }: SettingsPageProps) {
 	const showRelicScannerSection = activeSection === "relic-scanner";
+	const showInventorySyncSection = activeSection === "inventory-sync";
 	const showEeLogPathSection = activeSection === "ee-log-path";
 	const showDebugToolsSection = activeSection === "debug-tools";
 	const showDataInspectorSection = activeSection === "data-inspector";
@@ -140,6 +149,59 @@ export function SettingsPage({
 							>
 								Run manual scan
 							</Button>
+						</div>
+					</CardContent>
+				</Card>
+			)}
+
+			{showInventorySyncSection && (
+				<Card>
+					<CardHeader>
+						<CardTitle>Inventory Sync</CardTitle>
+						<CardDescription>
+							Configure automatic inventory refresh timing.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="flex flex-col gap-4">
+						<label className="flex items-center justify-between p-3 border rounded">
+							<div>
+								<p className="text-sm font-medium">Auto-refresh inventory</p>
+								<p className="text-xs text-muted-foreground">
+									Automatically fetches inventory data on a timer.
+								</p>
+							</div>
+							<input
+								type="checkbox"
+								checked={inventoryAutoRefreshEnabled}
+								onChange={(event) =>
+									onInventoryAutoRefreshEnabledChange(event.target.checked)
+								}
+							/>
+						</label>
+
+						<div className="flex flex-col gap-2">
+							<label htmlFor="inventory-refresh-interval" className="text-sm font-medium">
+								Refresh interval (seconds)
+							</label>
+							<input
+								id="inventory-refresh-interval"
+								type="number"
+								min={15}
+								step={1}
+								value={inventoryAutoRefreshIntervalSeconds}
+								disabled={!inventoryAutoRefreshEnabled}
+								onChange={(event) => {
+									const parsed = Number.parseInt(event.target.value, 10);
+									if (Number.isNaN(parsed)) {
+										return;
+									}
+									onInventoryAutoRefreshIntervalSecondsChange(parsed);
+								}}
+								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground disabled:opacity-60"
+							/>
+							<p className="text-xs text-muted-foreground">
+								Minimum 15 seconds.
+							</p>
 						</div>
 					</CardContent>
 				</Card>
@@ -355,7 +417,7 @@ export function SettingsPage({
 								</ScrollArea>
 							) : (
 								<p className="text-sm text-muted-foreground">
-									No inventory loaded. Click refresh in Foundry to load.
+									No inventory loaded. Click Refresh Inventory in the sidebar to load.
 								</p>
 							)}
 						</div>

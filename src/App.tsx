@@ -25,6 +25,8 @@ import {
 	setAppActiveTab,
 	setAppCompanions,
 	setAppEeLogPath,
+	setAppInventoryAutoRefreshEnabled,
+	setAppInventoryAutoRefreshIntervalSeconds,
 	setAppPendingRecipes,
 	setAppRelicOverlayEnabled,
 	setAppRelicScannerEnabled,
@@ -373,7 +375,12 @@ function buildOwnedRelics(
 }
 
 function AppMain() {
-	const { inventory, error: inventoryError, refreshInventory } = useInventory();
+	const {
+		inventory,
+		error: inventoryError,
+		refreshInventory,
+		loading: inventoryLoading,
+	} = useInventory();
 
 	const {
 		assets,
@@ -420,6 +427,18 @@ function AppMain() {
 	const relicScannerStatus = useStore(
 		appStore,
 		(state) => state.relicScannerStatus,
+	);
+	const inventoryAutoRefreshEnabled = useStore(
+		appStore,
+		(state) => state.inventoryAutoRefreshEnabled,
+	);
+	const inventoryAutoRefreshIntervalSeconds = useStore(
+		appStore,
+		(state) => state.inventoryAutoRefreshIntervalSeconds,
+	);
+	const inventoryLastRefreshAt = useStore(
+		appStore,
+		(state) => state.inventoryLastRefreshAt,
 	);
 	const relicScans = useStore(appStore, (state) => state.relicScans);
 	const rewardPlatinumValuesRef = useRef<Record<string, number>>({});
@@ -985,6 +1004,8 @@ function AppMain() {
 					relicScannerEnabled?: boolean;
 					relicOverlayEnabled?: boolean;
 					relicScannerHotkey?: string;
+					inventoryAutoRefreshEnabled?: boolean;
+					inventoryAutoRefreshIntervalSeconds?: number;
 				};
 				if (typeof parsed.relicScannerEnabled === "boolean") {
 					setAppRelicScannerEnabled(parsed.relicScannerEnabled);
@@ -1000,6 +1021,14 @@ function AppMain() {
 							? DEFAULT_RELIC_SCANNER_HOTKEY
 							: parsedHotkey || DEFAULT_RELIC_SCANNER_HOTKEY;
 					setAppRelicScannerHotkey(migratedHotkey);
+				}
+				if (typeof parsed.inventoryAutoRefreshEnabled === "boolean") {
+					setAppInventoryAutoRefreshEnabled(parsed.inventoryAutoRefreshEnabled);
+				}
+				if (typeof parsed.inventoryAutoRefreshIntervalSeconds === "number") {
+					setAppInventoryAutoRefreshIntervalSeconds(
+						Math.max(5, Math.floor(parsed.inventoryAutoRefreshIntervalSeconds)),
+					);
 				}
 			}
 		} catch (err) {
@@ -1032,6 +1061,8 @@ function AppMain() {
 					relicScannerEnabled,
 					relicOverlayEnabled,
 					relicScannerHotkey: normalizedRelicScannerHotkey,
+					inventoryAutoRefreshEnabled,
+					inventoryAutoRefreshIntervalSeconds,
 				}),
 			);
 		} catch (err) {
@@ -1041,7 +1072,37 @@ function AppMain() {
 		relicOverlayEnabled,
 		relicScannerEnabled,
 		normalizedRelicScannerHotkey,
+		inventoryAutoRefreshEnabled,
+		inventoryAutoRefreshIntervalSeconds,
 		scannerSettingsLoaded,
+	]);
+
+	useEffect(() => {
+		if (!inventoryAutoRefreshEnabled) {
+			return;
+		}
+
+		const intervalMs = Math.max(5, inventoryAutoRefreshIntervalSeconds) * 1000;
+		let inFlight = false;
+		const interval = window.setInterval(() => {
+			if (inFlight || inventoryLoading) {
+				return;
+			}
+
+			inFlight = true;
+			void refreshInventory().finally(() => {
+				inFlight = false;
+			});
+		}, intervalMs);
+
+		return () => {
+			window.clearInterval(interval);
+		};
+	}, [
+		inventoryAutoRefreshEnabled,
+		inventoryAutoRefreshIntervalSeconds,
+		inventoryLoading,
+		refreshInventory,
 	]);
 
 	useEffect(() => {
@@ -1076,6 +1137,8 @@ function AppMain() {
 						relicScannerEnabled,
 						relicOverlayEnabled: nextEnabled,
 						relicScannerHotkey: normalizedRelicScannerHotkey,
+						inventoryAutoRefreshEnabled,
+						inventoryAutoRefreshIntervalSeconds,
 					}),
 				);
 			} catch (err) {
@@ -1095,7 +1158,13 @@ function AppMain() {
 				);
 			}
 		},
-		[normalizedRelicScannerHotkey, relicOverlayEnabled, relicScannerEnabled],
+		[
+			normalizedRelicScannerHotkey,
+			relicOverlayEnabled,
+			relicScannerEnabled,
+			inventoryAutoRefreshEnabled,
+			inventoryAutoRefreshIntervalSeconds,
+		],
 	);
 
 	useEffect(() => {
@@ -1569,7 +1638,7 @@ function AppMain() {
 			const pendingRecipeEntries: InventoryPendingRecipeEntry[] =
 				inventoryData.PendingRecipes || [];
 			const pendingRecipes: PendingRecipe[] = pendingRecipeEntries
-				.map((entry) => {
+				.map<PendingRecipe | null>((entry) => {
 					const completionLong = entry.CompletionDate?.$date?.$numberLong;
 					const completionTimestamp =
 						typeof completionLong === "string" ? Number(completionLong) : NaN;
@@ -1599,7 +1668,7 @@ function AppMain() {
 						name: displayName,
 						imageUrl,
 						completionTimestamp,
-						buildTime,
+						...(typeof buildTime === "number" ? { buildTime } : {}),
 					};
 				})
 				.filter((entry): entry is PendingRecipe => entry !== null)
@@ -1878,11 +1947,17 @@ function AppMain() {
 					onExitSettings={() => setAppActiveTab("foundry")}
 				/>
 			) : (
-				<Sidebar activeTab={activeTab} onTabChange={setAppActiveTab} />
+				<Sidebar
+					activeTab={activeTab}
+					onTabChange={setAppActiveTab}
+					onRefresh={refreshInventory}
+					refreshLoading={inventoryLoading}
+					lastRefreshAt={inventoryLastRefreshAt}
+				/>
 			)}
 			<main className="flex-1 min-w-0 min-h-0 p-2 pb-0">
 				{activeTab === "foundry" ? (
-					<FoundryPage error={error} onRefresh={refreshInventory} />
+					<FoundryPage error={error} />
 				) : activeTab === "mastery-helper" ? (
 					<div className="h-full">
 						<MasteryHelperPage />
@@ -1904,6 +1979,18 @@ function AppMain() {
 						<div className="h-full min-w-0">
 							<SettingsPage
 								activeSection={activeSettingsSection}
+								inventoryAutoRefreshEnabled={inventoryAutoRefreshEnabled}
+								onInventoryAutoRefreshEnabledChange={
+									setAppInventoryAutoRefreshEnabled
+								}
+								inventoryAutoRefreshIntervalSeconds={
+									inventoryAutoRefreshIntervalSeconds
+								}
+								onInventoryAutoRefreshIntervalSecondsChange={(value) => {
+									setAppInventoryAutoRefreshIntervalSeconds(
+										Math.max(5, Math.floor(value)),
+									);
+								}}
 								indexLoading={indexLoading}
 								error={error}
 								assets={assets}

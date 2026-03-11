@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 
 export type SettingsSection =
 	| "relic-scanner"
+	| "inventory-sync"
 	| "ee-log-path"
 	| "debug-tools"
 	| "data-inspector";
@@ -14,6 +15,7 @@ interface SettingsSidebarProps {
 
 const GENERAL_SECTIONS: Array<{ id: SettingsSection; label: string }> = [
 	{ id: "relic-scanner", label: "Relic Scanner" },
+	{ id: "inventory-sync", label: "Inventory" },
 	{ id: "ee-log-path", label: "EE.log Path" },
 ];
 

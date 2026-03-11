@@ -1,5 +1,4 @@
 import { useStore } from "@tanstack/react-store";
-import { Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ export type FoundryFilter =
 
 interface FoundryPageProps {
 	error: string;
-	onRefresh: () => void;
 }
 
 interface CollectionPart {
@@ -319,7 +317,7 @@ function PendingRecipesSection({
 	);
 }
 
-export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
+export function FoundryPage({ error }: FoundryPageProps) {
 	const foundryFilter = useStore(appStore, (state) => state.foundryFilter);
 	const warframes = useStore(appStore, (state) => state.warframes);
 	const weapons = useStore(appStore, (state) => state.weapons);
@@ -809,24 +807,6 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							Pending
 						</span>
 					</Button>
-					<Button
-						onClick={onRefresh}
-						disabled={loading}
-						variant="secondary"
-						className="gap-2 ml-auto"
-					>
-						{loading ? (
-							<>
-								<Loader2 className="w-4 h-4 animate-spin" />
-								Loading...
-							</>
-						) : (
-							<>
-								<RefreshCw className="w-4 h-4" />
-								Refresh
-							</>
-						)}
-					</Button>
 				</div>
 
 				{error && (
@@ -844,7 +824,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={warframeItems}
 							loading={loading}
 							emptyLoadingText="Loading warframe data..."
-							emptyIdleText="Click refresh to load warframe data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
 						/>
 					)}
 
@@ -853,7 +833,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={allArchwingItems}
 							loading={loading}
 							emptyLoadingText="Loading archwing data..."
-							emptyIdleText="Click refresh to load archwing data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
 						/>
 					)}
 
@@ -862,7 +842,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={primaryItems}
 							loading={loading}
 							emptyLoadingText="Loading primary weapon data..."
-							emptyIdleText="Click refresh to load primary weapon data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
 						/>
 					)}
 
@@ -871,7 +851,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={secondaryItems}
 							loading={loading}
 							emptyLoadingText="Loading secondary weapon data..."
-							emptyIdleText="Click refresh to load secondary weapon data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
 						/>
 					)}
 
@@ -880,7 +860,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={meleeItems}
 							loading={loading}
 							emptyLoadingText="Loading melee weapon data..."
-							emptyIdleText="Click refresh to load melee weapon data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
 						/>
 					)}
 
@@ -889,7 +869,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={modularWeaponItems}
 							loading={loading}
 							emptyLoadingText="Loading modular weapon data..."
-							emptyIdleText="Click refresh to load modular weapon data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
 						/>
 					)}
 
@@ -898,7 +878,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							items={companionItems}
 							loading={loading}
 							emptyLoadingText="Loading companion data..."
-							emptyIdleText="Click refresh to load companion data"
+							emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
 						/>
 					)}
 

@@ -5,6 +5,7 @@ import {
 	appStore,
 	setAppInventory,
 	setAppInventoryError,
+	setAppInventoryLastRefreshAt,
 	setAppInventoryLoading,
 } from "@/store/appStore";
 
@@ -33,6 +34,7 @@ export function useInventory() {
 		try {
 			const result = await invoke<string>("fetch_warframe_inventory");
 			setAppInventory(result);
+			setAppInventoryLastRefreshAt(Date.now());
 
 			try {
 				localStorage.setItem(INVENTORY_CACHE_KEY, result);
