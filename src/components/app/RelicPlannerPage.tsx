@@ -1,5 +1,5 @@
 import { useStore } from "@tanstack/react-store";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { calculateExpectedDucats, calculateExpectedPlatinum } from "@/lib/relics.utils";
-import { appStore, setAppVisibleRewardNames } from "@/store/appStore";
+import { appStore } from "@/store/appStore";
 import type { OwnedRelic, OwnedRelicReward } from "@/types";
 
 function rarityOrder(rarity: string): number {
@@ -188,7 +188,6 @@ export function RelicPlannerPage() {
 	const warframes = useStore(appStore, (state) => state.warframes);
 	const weapons = useStore(appStore, (state) => state.weapons);
 	const companions = useStore(appStore, (state) => state.companions);
-	const gridRef = useRef<HTMLDivElement | null>(null);
 	const [showVaultedOnly, setShowVaultedOnly] = useState(false);
 	const [showAllRewardsOwnedOnly, setShowAllRewardsOwnedOnly] = useState(false);
 	const [showAllItemsMasteredOrOwnedOnly, setShowAllItemsMasteredOrOwnedOnly] =
@@ -506,93 +505,6 @@ export function RelicPlannerPage() {
 		tierFilter,
 		sortKey,
 	]);
-	const relicRewardNamesByRelic = useMemo(
-		() =>
-			new Map(
-				filteredAndSortedRelics.map((relic) => [
-					relic.uniqueName,
-					relic.relicRewards.map((reward) => reward.rewardName),
-				]),
-			),
-		[filteredAndSortedRelics],
-	);
-
-	useEffect(() => {
-		if (!gridRef.current) {
-			setAppVisibleRewardNames([]);
-			return;
-		}
-
-		const viewport = gridRef.current.closest(
-			"[data-slot='scroll-area-viewport']",
-		);
-		if (!(viewport instanceof HTMLElement)) {
-			setAppVisibleRewardNames([]);
-			return;
-		}
-
-		const visibleRelics = new Set<string>();
-
-		const notifyVisibleRewards = () => {
-			const rewardNames = new Set<string>();
-			for (const relicUniqueName of visibleRelics) {
-				const rewardNamesForRelic =
-					relicRewardNamesByRelic.get(relicUniqueName) ?? [];
-				for (const rewardName of rewardNamesForRelic) {
-					rewardNames.add(rewardName);
-				}
-			}
-
-			setAppVisibleRewardNames((previous) => {
-				const normalized = [...rewardNames].sort();
-				if (
-					previous.length === normalized.length &&
-					previous.every((value, index) => value === normalized[index])
-				) {
-					return previous;
-				}
-				return normalized;
-			});
-		};
-
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					const relicUniqueName = (entry.target as HTMLElement).dataset
-						.relicUniqueName;
-					if (!relicUniqueName) {
-						continue;
-					}
-
-					if (entry.isIntersecting) {
-						visibleRelics.add(relicUniqueName);
-					} else {
-						visibleRelics.delete(relicUniqueName);
-					}
-				}
-
-				notifyVisibleRewards();
-			},
-			{
-				root: viewport,
-				threshold: 0.05,
-			},
-		);
-
-		const cards = gridRef.current.querySelectorAll<HTMLElement>(
-			"[data-relic-unique-name]",
-		);
-		for (const card of cards) {
-			observer.observe(card);
-		}
-
-		notifyVisibleRewards();
-
-		return () => {
-			observer.disconnect();
-		};
-	}, [relicRewardNamesByRelic]);
-
 	if (!inventory) {
 		return (
 			<Card>
@@ -709,16 +621,13 @@ export function RelicPlannerPage() {
 					</div>
 				</CardContent>
 			</Card>
-			<ScrollArea className="h-full rounded-md">
+			<ScrollArea className="flex-1 min-h-0 rounded-md">
 				{filteredAndSortedRelics.length === 0 ? (
 					<div className="p-6 text-center text-muted-foreground">
 						No relics match the selected filters.
 					</div>
 				) : (
-					<div
-						className="grid grid-cols-1 gap-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-						ref={gridRef}
-					>
+					<div className="grid grid-cols-1 gap-2 pb-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 						{filteredAndSortedRelics.map((relic) => {
 							const meta = relicMeta.get(relic.uniqueName);
 							const expectedDucats = meta?.expectedDucatsBySquad ?? relic.expectedDucats;

@@ -401,10 +401,6 @@ function AppMain() {
 		error: dataError,
 	} = useData();
 	const activeTab = useStore(appStore, (state) => state.activeTab);
-	const visibleRewardNames = useStore(
-		appStore,
-		(state) => state.visibleRewardNames,
-	);
 	const rewardPlatinumValues = useStore(
 		appStore,
 		(state) => state.rewardPlatinumValues,
@@ -1455,10 +1451,6 @@ function AppMain() {
 	]);
 
 	useEffect(() => {
-		if (visibleRewardNames.length === 0) {
-			return;
-		}
-
 		const marketLookup = dailyMarketPriceLookup;
 		if (!marketLookup) {
 			return;
@@ -1468,8 +1460,8 @@ function AppMain() {
 		const nextFetchedAt = { ...rewardPlatinumFetchedAtRef.current };
 		let hasChanges = false;
 
-		for (const rewardName of visibleRewardNames) {
-			const normalizedRewardName = normalizeRewardGameRef(rewardName);
+		for (const reward of scannerRewardLookup) {
+			const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
 			const directPrice = getDailyMarketPriceForReward(normalizedRewardName);
 
 			if (nextValues[normalizedRewardName] !== directPrice) {
@@ -1492,9 +1484,9 @@ function AppMain() {
 		setAppRewardPlatinumValues(nextValues);
 		setAppRewardPlatinumFetchedAt(nextFetchedAt);
 	}, [
-		visibleRewardNames,
 		dailyMarketPriceLookup,
 		getDailyMarketPriceForReward,
+		scannerRewardLookup,
 	]);
 
 	// if the daily snapshot arrives after we've already recorded scans, re-
