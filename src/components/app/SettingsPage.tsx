@@ -14,6 +14,8 @@ import type { AssetEntry } from "@/types";
 
 interface SettingsPageProps {
 	activeSection: SettingsSection;
+	use24HourClock: boolean;
+	onUse24HourClockChange: (value: boolean) => void;
 	inventoryAutoRefreshEnabled: boolean;
 	onInventoryAutoRefreshEnabledChange: (value: boolean) => void;
 	inventoryAutoRefreshIntervalSeconds: number;
@@ -50,6 +52,8 @@ interface SettingsPageProps {
 
 export function SettingsPage({
 	activeSection,
+	use24HourClock,
+	onUse24HourClockChange,
 	inventoryAutoRefreshEnabled,
 	onInventoryAutoRefreshEnabledChange,
 	inventoryAutoRefreshIntervalSeconds,
@@ -75,6 +79,7 @@ export function SettingsPage({
 	relicImageTestLoading,
 	latestRewardGuessDebug,
 }: SettingsPageProps) {
+	const showGeneralSection = activeSection === "general";
 	const showRelicScannerSection = activeSection === "relic-scanner";
 	const showInventorySyncSection = activeSection === "inventory-sync";
 	const showEeLogPathSection = activeSection === "ee-log-path";
@@ -83,6 +88,34 @@ export function SettingsPage({
 
 	return (
 		<div className="flex flex-col min-w-0 gap-2">
+			{showGeneralSection && (
+				<Card>
+					<CardHeader>
+						<CardTitle>General</CardTitle>
+						<CardDescription>
+							General app preferences.
+						</CardDescription>
+					</CardHeader>
+					<CardContent className="flex flex-col gap-4">
+						<label className="flex items-center justify-between p-3 border rounded">
+							<div>
+								<p className="text-sm font-medium">Use 24-hour clock</p>
+								<p className="text-xs text-muted-foreground">
+									Used for refresh and completion timestamps.
+								</p>
+							</div>
+							<input
+								type="checkbox"
+								checked={use24HourClock}
+								onChange={(event) =>
+									onUse24HourClockChange(event.target.checked)
+								}
+							/>
+						</label>
+					</CardContent>
+				</Card>
+			)}
+
 			{showRelicScannerSection && (
 				<Card>
 					<CardHeader>

@@ -36,6 +36,7 @@ import {
 	setAppRelics,
 	setAppRewardPlatinumFetchedAt,
 	setAppRewardPlatinumValues,
+	setAppUse24HourClock,
 	setAppWarframes,
 	setAppWeapons,
 } from "@/store/appStore";
@@ -432,6 +433,7 @@ function AppMain() {
 		appStore,
 		(state) => state.inventoryAutoRefreshEnabled,
 	);
+	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
 	const inventoryAutoRefreshIntervalSeconds = useStore(
 		appStore,
 		(state) => state.inventoryAutoRefreshIntervalSeconds,
@@ -450,7 +452,7 @@ function AppMain() {
 	const [relicImageTestLoading, setRelicImageTestLoading] = useState(false);
 	const [scannerSettingsLoaded, setScannerSettingsLoaded] = useState(false);
 	const [activeSettingsSection, setActiveSettingsSection] =
-		useState<SettingsSection>("relic-scanner");
+		useState<SettingsSection>("general");
 	const [latestRewardGuessDebug, setLatestRewardGuessDebug] = useState<
 		RewardGuessDebugEntry[]
 	>([]);
@@ -1001,12 +1003,16 @@ function AppMain() {
 			);
 			if (rawScannerSettings) {
 				const parsed = JSON.parse(rawScannerSettings) as {
+					use24HourClock?: boolean;
 					relicScannerEnabled?: boolean;
 					relicOverlayEnabled?: boolean;
 					relicScannerHotkey?: string;
 					inventoryAutoRefreshEnabled?: boolean;
 					inventoryAutoRefreshIntervalSeconds?: number;
 				};
+				if (typeof parsed.use24HourClock === "boolean") {
+					setAppUse24HourClock(parsed.use24HourClock);
+				}
 				if (typeof parsed.relicScannerEnabled === "boolean") {
 					setAppRelicScannerEnabled(parsed.relicScannerEnabled);
 				}
@@ -1058,6 +1064,7 @@ function AppMain() {
 			localStorage.setItem(
 				RELIC_SCANNER_SETTINGS_CACHE_KEY,
 				JSON.stringify({
+					use24HourClock,
 					relicScannerEnabled,
 					relicOverlayEnabled,
 					relicScannerHotkey: normalizedRelicScannerHotkey,
@@ -1069,6 +1076,7 @@ function AppMain() {
 			console.error("Failed to persist scanner settings cache:", err);
 		}
 	}, [
+		use24HourClock,
 		relicOverlayEnabled,
 		relicScannerEnabled,
 		normalizedRelicScannerHotkey,
@@ -1134,6 +1142,7 @@ function AppMain() {
 				localStorage.setItem(
 					RELIC_SCANNER_SETTINGS_CACHE_KEY,
 					JSON.stringify({
+						use24HourClock,
 						relicScannerEnabled,
 						relicOverlayEnabled: nextEnabled,
 						relicScannerHotkey: normalizedRelicScannerHotkey,
@@ -1159,6 +1168,7 @@ function AppMain() {
 			}
 		},
 		[
+			use24HourClock,
 			normalizedRelicScannerHotkey,
 			relicOverlayEnabled,
 			relicScannerEnabled,
@@ -1953,6 +1963,7 @@ function AppMain() {
 					onRefresh={refreshInventory}
 					refreshLoading={inventoryLoading}
 					lastRefreshAt={inventoryLastRefreshAt}
+					use24HourClock={use24HourClock}
 				/>
 			)}
 			<main className="flex-1 min-w-0 min-h-0 p-2 pb-0">
@@ -1979,6 +1990,8 @@ function AppMain() {
 						<div className="h-full min-w-0">
 							<SettingsPage
 								activeSection={activeSettingsSection}
+								use24HourClock={use24HourClock}
+								onUse24HourClockChange={setAppUse24HourClock}
 								inventoryAutoRefreshEnabled={inventoryAutoRefreshEnabled}
 								onInventoryAutoRefreshEnabledChange={
 									setAppInventoryAutoRefreshEnabled

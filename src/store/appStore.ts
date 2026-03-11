@@ -28,6 +28,7 @@ function resolveUpdater<T>(value: Updater<T>, previous: T): T {
 export interface AppState {
 	activeTab: AppTab;
 	foundryFilter: FoundryFilter;
+	use24HourClock: boolean;
 	inventoryAutoRefreshEnabled: boolean;
 	inventoryAutoRefreshIntervalSeconds: number;
 	inventoryLastRefreshAt: number | null;
@@ -53,6 +54,7 @@ export interface AppState {
 export const appStore = new Store<AppState>({
 	activeTab: "foundry",
 	foundryFilter: "warframes",
+	use24HourClock: false,
 	inventoryAutoRefreshEnabled: false,
 	inventoryAutoRefreshIntervalSeconds: 180,
 	inventoryLastRefreshAt: null,
@@ -91,6 +93,10 @@ export function setAppActiveTab(value: AppTab) {
 
 export function setAppFoundryFilter(value: FoundryFilter) {
 	updateStoreSlice("foundryFilter", value);
+}
+
+export function setAppUse24HourClock(value: Updater<boolean>) {
+	updateStoreSlice("use24HourClock", value);
 }
 
 export function setAppInventoryAutoRefreshEnabled(value: Updater<boolean>) {

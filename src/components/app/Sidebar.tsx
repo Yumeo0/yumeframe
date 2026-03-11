@@ -1,5 +1,6 @@
 import { Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatClockTime } from "@/lib/datetime.utils";
 
 type Tab =
 	| "foundry"
@@ -14,6 +15,7 @@ interface SidebarProps {
 	onRefresh: () => void;
 	refreshLoading: boolean;
 	lastRefreshAt: number | null;
+	use24HourClock: boolean;
 }
 
 export function Sidebar({
@@ -22,13 +24,10 @@ export function Sidebar({
 	onRefresh,
 	refreshLoading,
 	lastRefreshAt,
+	use24HourClock,
 }: SidebarProps) {
 	const lastRefreshLabel = lastRefreshAt
-		? new Date(lastRefreshAt).toLocaleTimeString([], {
-			hour: "2-digit",
-			minute: "2-digit",
-			second: "2-digit",
-		})
+		? formatClockTime(lastRefreshAt, use24HourClock)
 		: "Never";
 
 	return (

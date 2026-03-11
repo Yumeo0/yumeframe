@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { formatDateTime } from "@/lib/datetime.utils";
 import { appStore, setAppFoundryFilter } from "@/store/appStore";
 
 export type FoundryFilter =
@@ -239,12 +240,14 @@ interface PendingRecipesSectionProps {
 	pendingRecipes: PendingRecipeItem[];
 	now: number;
 	loading: boolean;
+	use24HourClock: boolean;
 }
 
 function PendingRecipesSection({
 	pendingRecipes,
 	now,
 	loading,
+	use24HourClock,
 }: PendingRecipesSectionProps) {
 	return (
 		<div>
@@ -294,7 +297,7 @@ function PendingRecipesSection({
 												{formatRemainingTime(remaining)}
 											</p>
 											<p className="text-xs text-muted-foreground">
-												Done: {new Date(recipe.completionTimestamp).toLocaleString()}
+												Done: {formatDateTime(recipe.completionTimestamp, use24HourClock)}
 											</p>
 											<Progress value={progressValue} className="h-2 mt-2" />
 										</div>
@@ -323,6 +326,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	const weapons = useStore(appStore, (state) => state.weapons);
 	const companions = useStore(appStore, (state) => state.companions);
 	const pendingRecipes = useStore(appStore, (state) => state.pendingRecipes);
+	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
 	const [now, setNow] = useState(() => Date.now());
 
@@ -887,6 +891,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							pendingRecipes={pendingRecipeItems}
 							now={now}
 							loading={loading}
+							use24HourClock={use24HourClock}
 						/>
 					)}
 				</div>
