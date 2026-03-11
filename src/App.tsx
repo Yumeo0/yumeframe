@@ -1737,7 +1737,7 @@ function AppMain() {
 					name: partName,
 					itemType,
 					count: itemCount,
-					owned: hasRecipe || hasEnoughMaterials,
+					owned: hasEnoughMaterials,
 					hasRecipe,
 					isCraftingRecipe,
 					imageUrl: partIcon,

@@ -75,14 +75,14 @@ function CollectionSection({
 							return (
 								<Card
 									key={item.key}
-									className={`group relative overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
+									className={`group/card relative overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
 								>
 									<Button
 										type="button"
 										variant="secondary"
 										size="sm"
 										onClick={() => onOpenCraftingTree(item)}
-										className="absolute z-20 transition-opacity opacity-0 right-2 bottom-2 group-hover:opacity-100"
+										className="absolute z-20 transition-opacity opacity-0 right-2 bottom-2 group-hover/card:opacity-100"
 									>
 										Crafting Tree
 									</Button>

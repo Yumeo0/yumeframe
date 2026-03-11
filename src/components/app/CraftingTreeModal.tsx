@@ -320,14 +320,11 @@ function buildTreeLayout(root: CraftingTreeNode): TreeLayout {
 }
 
 function getNodeStatus(node: PositionedNode): string {
-	if (node.owned === true && node.hasRecipe) {
-		return "Blueprint owned";
-	}
 	if (node.owned === true) {
 		return "Owned";
 	}
-	if (node.owned === false && node.hasRecipe) {
-		return "Recipe owned";
+	if (node.owned === false && node.hasRecipe === true) {
+		return "Blueprint Owned";
 	}
 	if (node.owned === false) {
 		return "Missing";
@@ -339,8 +336,8 @@ function getNodeStateClass(node: PositionedNode): string {
 	if (node.owned === true) {
 		return "border-green-500/60 bg-green-500/10";
 	}
-	if (node.owned === false && node.hasRecipe) {
-		return "border-primary/60 bg-primary/10";
+	if (node.owned === false && node.hasRecipe === true) {
+		return "border-white/70 bg-white/10";
 	}
 	if (node.owned === false) {
 		return "border-amber-500/60 bg-amber-500/10";
@@ -437,14 +434,16 @@ export function CraftingTreeModal({
 					owned: part.owned,
 					hasRecipe: part.hasRecipe,
 					isCraftable: true,
-					children: nestedRequirements.map((childPart, index) =>
-						buildPartNode(
-							childPart,
-							`${id}-${index}-${childPart.name}`,
-							depth + 1,
-							path,
+					children: [
+						...nestedRequirements.map((childPart, index) =>
+							buildPartNode(
+								childPart,
+								`${id}-${index}-${childPart.name}`,
+								depth + 1,
+								path,
+							),
 						),
-					),
+					],
 				};
 			}
 
