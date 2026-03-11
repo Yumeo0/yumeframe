@@ -8,6 +8,10 @@ import { MasteryHelperPage } from "@/components/app/MasteryHelperPage";
 import { RelicPlannerPage } from "@/components/app/RelicPlannerPage";
 import { RelicScannerPage } from "@/components/app/RelicScannerPage";
 import { SettingsPage } from "@/components/app/SettingsPage";
+import {
+	type SettingsSection,
+	SettingsSidebar,
+} from "@/components/app/SettingsSidebar";
 import { Sidebar } from "@/components/app/Sidebar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useData } from "@/hooks/useData";
@@ -426,6 +430,8 @@ function AppMain() {
 	const [relicImageTestPath, setRelicImageTestPath] = useState("");
 	const [relicImageTestLoading, setRelicImageTestLoading] = useState(false);
 	const [scannerSettingsLoaded, setScannerSettingsLoaded] = useState(false);
+	const [activeSettingsSection, setActiveSettingsSection] =
+		useState<SettingsSection>("relic-scanner");
 	const [latestRewardGuessDebug, setLatestRewardGuessDebug] = useState<
 		RewardGuessDebugEntry[]
 	>([]);
@@ -1859,7 +1865,15 @@ function AppMain() {
 
 	return (
 		<div className="flex h-screen overflow-hidden bg-background">
-			<Sidebar activeTab={activeTab} onTabChange={setAppActiveTab} />
+			{activeTab === "settings" ? (
+				<SettingsSidebar
+					activeSection={activeSettingsSection}
+					onSectionChange={setActiveSettingsSection}
+					onExitSettings={() => setAppActiveTab("foundry")}
+				/>
+			) : (
+				<Sidebar activeTab={activeTab} onTabChange={setAppActiveTab} />
+			)}
 			<main className="flex-1 min-w-0 min-h-0 p-2 pb-0">
 				{activeTab === "foundry" ? (
 					<FoundryPage error={error} onRefresh={refreshInventory} />
@@ -1883,6 +1897,7 @@ function AppMain() {
 					<ScrollArea className="h-full min-w-0">
 						<div className="h-full min-w-0">
 							<SettingsPage
+								activeSection={activeSettingsSection}
 								indexLoading={indexLoading}
 								error={error}
 								assets={assets}
