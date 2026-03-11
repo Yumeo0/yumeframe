@@ -58,6 +58,7 @@ import type {
 	Warframe,
 	WarframePart,
 	WarframeSuit,
+	WeaponCraftRequirement,
 } from "@/types";
 
 const RELIC_PRICE_CACHE_KEY = "yumeframe.relic.price.cache";
@@ -1688,6 +1689,62 @@ function AppMain() {
 				pendingRecipes.map((recipe) => recipe.itemType),
 			);
 
+			const getBlueprintTypeForIngredient = (itemType: string) =>
+				itemType.replace("Component", "Blueprint");
+
+			const buildRequirementTree = (
+				itemType: string,
+				itemCount: number,
+				depth = 0,
+				path: Set<string> = new Set(),
+			): WeaponCraftRequirement => {
+				const partName =
+					weaponNames[itemType] ||
+					warframeNames[itemType] ||
+					companionNames[itemType] ||
+					resourceNames[itemType] ||
+					itemType.split("/").pop() ||
+					"Part";
+				const partTexture = manifestMap.get(itemType) || "";
+				const partIcon = partTexture
+					? `http://content.warframe.com/PublicExport${partTexture}`
+					: "";
+				const blueprintType = getBlueprintTypeForIngredient(itemType);
+				const hasRecipe =
+					ownedBlueprints.has(blueprintType) || ownedBlueprints.has(itemType);
+				const isCraftingRecipe =
+					pendingRecipeTypes.has(blueprintType) ||
+					pendingRecipeTypes.has(itemType);
+				const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
+				const hasEnoughMaterials = ownedMaterialCount >= itemCount;
+				const recipeForItem = recipeData[itemType];
+
+				let requirements: WeaponCraftRequirement[] | undefined;
+				if (recipeForItem && depth < 6 && path.has(itemType) === false) {
+					const nextPath = new Set(path);
+					nextPath.add(itemType);
+					requirements = recipeForItem.ingredients.map((ingredient) =>
+						buildRequirementTree(
+							ingredient.ItemType,
+							ingredient.ItemCount,
+							depth + 1,
+							nextPath,
+						),
+					);
+				}
+
+				return {
+					name: partName,
+					itemType,
+					count: itemCount,
+					owned: hasRecipe || hasEnoughMaterials,
+					hasRecipe,
+					isCraftingRecipe,
+					imageUrl: partIcon,
+					...(requirements ? { requirements } : {}),
+				};
+			};
+
 			const wfList: Warframe[] = Object.entries(warframeData).map(
 				([uniqueName, warframeInfo]) => {
 					const displayName = warframeInfo.name;
@@ -1731,37 +1788,15 @@ function AppMain() {
 
 					if (mainRecipe) {
 						for (const ingredient of mainRecipe.ingredients) {
-							const itemType = ingredient.ItemType;
-							const ingredientRecipeType = itemType.replace(
-								"Component",
-								"Blueprint",
+							const ingredientNode = buildRequirementTree(
+								ingredient.ItemType,
+								ingredient.ItemCount,
+								0,
+								new Set([uniqueName]),
 							);
-							const hasRecipe = ownedBlueprints.has(ingredientRecipeType);
-							const isCraftingRecipe =
-								pendingRecipeTypes.has(ingredientRecipeType);
-							const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
-							const hasEnoughMaterials =
-								ownedMaterialCount >= ingredient.ItemCount;
-							const partName =
-								weaponNames[itemType] ||
-								warframeNames[itemType] ||
-								companionNames[itemType] ||
-								resourceNames[itemType] ||
-								itemType.split("/").pop() ||
-								"Part";
-							const partTexture = manifestMap.get(itemType) || "";
-							const partIcon = partTexture
-								? `http://content.warframe.com/PublicExport${partTexture}`
-								: "";
 
 							parts.push({
-								name: partName,
-								itemType,
-								count: ingredient.ItemCount,
-								owned: hasRecipe || hasEnoughMaterials,
-								hasRecipe,
-								isCraftingRecipe,
-								imageUrl: partIcon,
+								...ingredientNode,
 							});
 						}
 					}
@@ -1794,36 +1829,14 @@ function AppMain() {
 
 					const weaponRecipe = recipeData[uniqueName];
 					const requirements =
-						weaponRecipe?.ingredients.map((ingredient) => {
-							const itemType = ingredient.ItemType;
-							const hasRecipe = ownedBlueprints.has(itemType);
-							const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
-							const hasEnoughMaterials =
-								ownedMaterialCount >= ingredient.ItemCount;
-							const requirementName =
-								weaponNames[itemType] ||
-								warframeNames[itemType] ||
-								companionNames[itemType] ||
-								resourceNames[itemType] ||
-								itemType.split("/").pop() ||
-								"Unknown";
-
-							const requirementTextureLocation =
-								manifestMap.get(itemType) || "";
-							const requirementImageUrl = requirementTextureLocation
-								? `http://content.warframe.com/PublicExport${requirementTextureLocation}`
-								: "";
-
-							return {
-								name: requirementName,
-								itemType,
-								count: ingredient.ItemCount,
-								imageUrl: requirementImageUrl,
-								owned: hasRecipe || hasEnoughMaterials,
-								hasRecipe,
-								isCraftingRecipe: pendingRecipeTypes.has(itemType),
-							};
-						}) || [];
+						weaponRecipe?.ingredients.map((ingredient) =>
+							buildRequirementTree(
+								ingredient.ItemType,
+								ingredient.ItemCount,
+								0,
+								new Set([uniqueName]),
+							),
+						) || [];
 
 					return {
 						...weaponInfo,
@@ -1852,36 +1865,14 @@ function AppMain() {
 
 					const companionRecipe = recipeData[uniqueName];
 					const requirements =
-						companionRecipe?.ingredients.map((ingredient) => {
-							const itemType = ingredient.ItemType;
-							const hasRecipe = ownedBlueprints.has(itemType);
-							const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
-							const hasEnoughMaterials =
-								ownedMaterialCount >= ingredient.ItemCount;
-							const requirementName =
-								weaponNames[itemType] ||
-								warframeNames[itemType] ||
-								companionNames[itemType] ||
-								resourceNames[itemType] ||
-								itemType.split("/").pop() ||
-								"Unknown";
-
-							const requirementTextureLocation =
-								manifestMap.get(itemType) || "";
-							const requirementImageUrl = requirementTextureLocation
-								? `http://content.warframe.com/PublicExport${requirementTextureLocation}`
-								: "";
-
-							return {
-								name: requirementName,
-								itemType,
-								count: ingredient.ItemCount,
-								imageUrl: requirementImageUrl,
-								owned: hasRecipe || hasEnoughMaterials,
-								hasRecipe,
-								isCraftingRecipe: pendingRecipeTypes.has(itemType),
-							};
-						}) || [];
+						companionRecipe?.ingredients.map((ingredient) =>
+							buildRequirementTree(
+								ingredient.ItemType,
+								ingredient.ItemCount,
+								0,
+								new Set([uniqueName]),
+							),
+						) || [];
 
 					const customName = ownedCompanionData?.Details?.Name;
 

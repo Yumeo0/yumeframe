@@ -98,6 +98,7 @@ export interface WarframePart {
 	count?: number;
 	hasRecipe?: boolean;
 	isCraftingRecipe?: boolean;
+	requirements?: WeaponCraftRequirement[];
 }
 
 export interface Warframe {
@@ -137,6 +138,7 @@ export interface WeaponCraftRequirement {
 	owned?: boolean;
 	hasRecipe?: boolean;
 	isCraftingRecipe?: boolean;
+	requirements?: WeaponCraftRequirement[];
 }
 
 // ============================================

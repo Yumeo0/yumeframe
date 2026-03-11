@@ -1,5 +1,10 @@
 import { useStore } from "@tanstack/react-store";
 import { useEffect, useMemo, useState } from "react";
+import { CraftingTreeModal } from "@/components/app/CraftingTreeModal";
+import type {
+	CollectionItem,
+	CollectionPart,
+} from "@/components/app/foundry.types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,30 +25,6 @@ export type FoundryFilter =
 
 interface FoundryPageProps {
 	error: string;
-}
-
-interface CollectionPart {
-	name: string;
-	imageUrl: string;
-	owned?: boolean;
-	count?: number;
-	hasRecipe?: boolean;
-	isCraftingRecipe?: boolean;
-}
-
-interface CollectionItem {
-	key: string;
-	name: string;
-	displayName: string;
-	xp: number;
-	isWeapon: boolean;
-	isSubsumed?: boolean;
-	maxLevel: number;
-	imageUrl: string;
-	favorite: boolean;
-	owned: boolean;
-	isCraftingRecipe?: boolean;
-	parts: CollectionPart[];
 }
 
 interface PendingRecipeItem {
@@ -69,6 +50,7 @@ interface CollectionSectionProps {
 	loading: boolean;
 	emptyLoadingText: string;
 	emptyIdleText: string;
+	onOpenCraftingTree: (item: CollectionItem) => void;
 }
 
 function CollectionSection({
@@ -76,6 +58,7 @@ function CollectionSection({
 	loading,
 	emptyLoadingText,
 	emptyIdleText,
+	onOpenCraftingTree,
 }: CollectionSectionProps) {
 	return (
 		<div>
@@ -92,8 +75,17 @@ function CollectionSection({
 							return (
 								<Card
 									key={item.key}
-									className={`overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
+									className={`group relative overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
 								>
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										onClick={() => onOpenCraftingTree(item)}
+										className="absolute z-20 transition-opacity opacity-0 right-2 bottom-2 group-hover:opacity-100"
+									>
+										Crafting Tree
+									</Button>
 									<CardHeader>
 										<div className="flex items-start justify-between">
 											<div className="flex-1">
@@ -329,6 +321,9 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
 	const [now, setNow] = useState(() => Date.now());
+	const [craftingTreeItem, setCraftingTreeItem] = useState<CollectionItem | null>(
+		null,
+	);
 
 	useEffect(() => {
 		const timer = window.setInterval(() => {
@@ -369,6 +364,19 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			weapon.uniqueName.includes("Modular") === false,
 	);
 
+	const mapRequirementToPart = (requirement: CollectionPart): CollectionPart => ({
+		name: requirement.name,
+		itemType: requirement.itemType,
+		count: requirement.count,
+		imageUrl: requirement.imageUrl,
+		owned: requirement.owned,
+		hasRecipe: requirement.hasRecipe,
+		isCraftingRecipe: requirement.isCraftingRecipe,
+		requirements: requirement.requirements?.map((nestedRequirement) =>
+			mapRequirementToPart(nestedRequirement),
+		),
+	});
+
 	const warframeItems: CollectionItem[] = regularWarframes.map((wf) => ({
 		key: wf.type,
 		name: wf.name,
@@ -381,14 +389,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: wf.favorite,
 		owned: wf.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(wf.type),
-		parts: wf.parts.map((part) => ({
-			name: part.name,
-			count: part.count,
-			imageUrl: part.imageUrl,
-			owned: part.owned,
-			hasRecipe: part.hasRecipe,
-			isCraftingRecipe: part.isCraftingRecipe,
-		})),
+		parts: wf.parts.map(mapRequirementToPart),
 	}));
 
 	const archwingItems: CollectionItem[] = archwings.map((wf) => ({
@@ -402,14 +403,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: wf.favorite,
 		owned: wf.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(wf.type),
-		parts: wf.parts.map((part) => ({
-			name: part.name,
-			count: part.count,
-			imageUrl: part.imageUrl,
-			owned: part.owned,
-			hasRecipe: part.hasRecipe,
-			isCraftingRecipe: part.isCraftingRecipe,
-		})),
+		parts: wf.parts.map(mapRequirementToPart),
 	}));
 
 	const archwingWeaponItems: CollectionItem[] = archwingWeapons.map(
@@ -425,14 +419,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			favorite: weapon.favorite,
 			owned: weapon.owned,
 			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-			parts: weapon.requirements.map((requirement) => ({
-				name: requirement.name,
-				count: requirement.count,
-				imageUrl: requirement.imageUrl,
-				owned: requirement.owned,
-				hasRecipe: requirement.hasRecipe,
-				isCraftingRecipe: requirement.isCraftingRecipe,
-			})),
+			parts: weapon.requirements.map(mapRequirementToPart),
 		}),
 	);
 
@@ -468,14 +455,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: weapon.favorite,
 		owned: weapon.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-			isCraftingRecipe: requirement.isCraftingRecipe,
-		})),
+		parts: weapon.requirements.map(mapRequirementToPart),
 	}));
 
 	const secondaryItems: CollectionItem[] = secondaryWeapons.map((weapon) => ({
@@ -490,14 +470,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: weapon.favorite,
 		owned: weapon.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-			isCraftingRecipe: requirement.isCraftingRecipe,
-		})),
+		parts: weapon.requirements.map(mapRequirementToPart),
 	}));
 
 	const meleeItems: CollectionItem[] = meleeWeapons.map((weapon) => ({
@@ -512,14 +485,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: weapon.favorite,
 		owned: weapon.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-			isCraftingRecipe: requirement.isCraftingRecipe,
-		})),
+		parts: weapon.requirements.map(mapRequirementToPart),
 	}));
 
 	const modularWeaponItems: CollectionItem[] = modularWeapons.map((weapon) => ({
@@ -534,14 +500,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		favorite: weapon.favorite,
 		owned: weapon.owned,
 		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map((requirement) => ({
-			name: requirement.name,
-			count: requirement.count,
-			imageUrl: requirement.imageUrl,
-			owned: requirement.owned,
-			hasRecipe: requirement.hasRecipe,
-			isCraftingRecipe: requirement.isCraftingRecipe,
-		})),
+		parts: weapon.requirements.map(mapRequirementToPart),
 	}));
 
 	const companionCompanionItems: CollectionItem[] = companions.map(
@@ -556,14 +515,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			favorite: companion.favorite,
 			owned: companion.owned,
 			isCraftingRecipe: pendingRecipeResultTypes.has(companion.type),
-			parts: companion.requirements.map((requirement) => ({
-				name: requirement.name,
-				count: requirement.count,
-				imageUrl: requirement.imageUrl,
-				owned: requirement.owned,
-				hasRecipe: requirement.hasRecipe,
-				isCraftingRecipe: requirement.isCraftingRecipe,
-			})),
+			parts: companion.requirements.map(mapRequirementToPart),
 		}),
 	);
 
@@ -580,14 +532,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			favorite: weapon.favorite,
 			owned: weapon.owned,
 			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-			parts: weapon.requirements.map((requirement) => ({
-				name: requirement.name,
-				count: requirement.count,
-				imageUrl: requirement.imageUrl,
-				owned: requirement.owned,
-				hasRecipe: requirement.hasRecipe,
-				isCraftingRecipe: requirement.isCraftingRecipe,
-			})),
+			parts: weapon.requirements.map(mapRequirementToPart),
 		}),
 	);
 
@@ -605,16 +550,43 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		...companionWeaponItems,
 	].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
+	const allCollectionItems = useMemo(
+		() => [
+			...warframeItems,
+			...allArchwingItems,
+			...primaryItems,
+			...secondaryItems,
+			...meleeItems,
+			...modularWeaponItems,
+			...companionItems,
+		],
+		[
+			warframeItems,
+			allArchwingItems,
+			primaryItems,
+			secondaryItems,
+			meleeItems,
+			modularWeaponItems,
+			companionItems,
+		],
+	);
+
 	const getFilterButtonClasses = (active: boolean) =>
 		`group transition-all duration-200 ${active ? "gap-2 px-3" : "gap-0 px-2 hover:gap-2 hover:px-3"}`;
 
 	const getFilterLabelClasses = (active: boolean) =>
 		`whitespace-nowrap overflow-hidden transition-all duration-200 ${active ? "max-w-24 opacity-100" : "max-w-0 opacity-0 group-hover:max-w-24 group-hover:opacity-100"}`;
 
+	const isCraftingTreeOpen = craftingTreeItem !== null;
+
 	return (
 		<div className="flex flex-col h-full min-h-0">
-			<div className="sticky top-0 z-10 bg-background">
-				<div className="flex flex-wrap gap-2 mb-2">
+			<div
+				className={isCraftingTreeOpen ? "pointer-events-none" : undefined}
+				aria-hidden={isCraftingTreeOpen}
+			>
+				<div className="sticky top-0 z-10 bg-background">
+					<div className="flex flex-wrap gap-2 mb-2">
 					<Button
 						variant={foundryFilter === "warframes" ? "default" : "outline"}
 						onClick={() => setAppFoundryFilter("warframes")}
@@ -813,22 +785,23 @@ export function FoundryPage({ error }: FoundryPageProps) {
 					</Button>
 				</div>
 
-				{error && (
-					<Alert variant="destructive" className="mb-2">
-						<AlertTitle>Error</AlertTitle>
-						<AlertDescription>{error}</AlertDescription>
-					</Alert>
-				)}
-			</div>
+					{error && (
+						<Alert variant="destructive" className="mb-2">
+							<AlertTitle>Error</AlertTitle>
+							<AlertDescription>{error}</AlertDescription>
+						</Alert>
+					)}
+				</div>
 
-			<ScrollArea className="flex-1 min-h-0">
-				<div className="space-y-2">
+				<ScrollArea className="flex-1 min-h-0">
+					<div className="space-y-2">
 					{foundryFilter === "warframes" && (
 						<CollectionSection
 							items={warframeItems}
 							loading={loading}
 							emptyLoadingText="Loading warframe data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -838,6 +811,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading archwing data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -847,6 +821,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading primary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -856,6 +831,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading secondary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -865,6 +841,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading melee weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -874,6 +851,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading modular weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -883,6 +861,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading companion data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
+							onOpenCraftingTree={setCraftingTreeItem}
 						/>
 					)}
 
@@ -894,8 +873,18 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							use24HourClock={use24HourClock}
 						/>
 					)}
-				</div>
-			</ScrollArea>
+					</div>
+				</ScrollArea>
+			</div>
+
+			{craftingTreeItem ? (
+				<CraftingTreeModal
+					key={craftingTreeItem.key}
+					item={craftingTreeItem}
+					allItems={allCollectionItems}
+					onClose={() => setCraftingTreeItem(null)}
+				/>
+			) : null}
 		</div>
 	);
 }
