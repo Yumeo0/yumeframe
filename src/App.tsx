@@ -13,6 +13,7 @@ import {
 	SettingsSidebar,
 } from "@/components/app/SettingsSidebar";
 import { Sidebar } from "@/components/app/Sidebar";
+import { WorldstatePage } from "@/components/app/WorldstatePage";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useData } from "@/hooks/useData";
 import { useInventory } from "@/hooks/useInventory";
@@ -1967,6 +1968,10 @@ function AppMain() {
 							scannerEnabled={relicScannerEnabled}
 							scans={relicScans}
 						/>
+					</div>
+				) : activeTab === "worldstate" ? (
+					<div className="h-full">
+						<WorldstatePage use24HourClock={use24HourClock} />
 					</div>
 				) : (
 					<ScrollArea className="h-full min-w-0">

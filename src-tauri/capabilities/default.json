@@ -16,6 +16,9 @@
         },
         {
           "url": "https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json"
+        },
+        {
+          "url": "https://api.warframe.com/*"
         }
       ]
     }

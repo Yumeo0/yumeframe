@@ -7,6 +7,7 @@ type Tab =
 	| "mastery-helper"
 	| "relic-planner"
 	| "relic-scanner"
+	| "worldstate"
 	| "settings";
 
 interface SidebarProps {
@@ -139,6 +140,28 @@ export function Sidebar({
 							}}
 						/>
 						<span className="hidden md:inline">Relic Scanner</span>
+					</Button>
+					<Button
+						variant={activeTab === "worldstate" ? "default" : "ghost"}
+						className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
+						aria-label="Worldstate"
+						onClick={() => onTabChange("worldstate")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${activeTab === "worldstate" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_appearance.svg")',
+								WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span className="hidden md:inline">Worldstate</span>
 					</Button>
 				</div>
 				<div className="space-y-2">

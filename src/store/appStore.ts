@@ -14,6 +14,7 @@ export type AppTab =
 	| "mastery-helper"
 	| "relic-planner"
 	| "relic-scanner"
+	| "worldstate"
 	| "settings";
 
 type Updater<T> = T | ((previous: T) => T);
