@@ -459,7 +459,8 @@ function AppMain() {
 	const [latestRewardGuessDebug, setLatestRewardGuessDebug] = useState<
 		RewardGuessDebugEntry[]
 	>([]);
-	const error = inventoryError || dataError;
+	const foundryError = dataError;
+	const appError = inventoryError || dataError;
 
 	const normalizedRelicScannerHotkey = useMemo(() => {
 		const normalized = relicScannerHotkey.trim().toUpperCase();
@@ -1968,11 +1969,12 @@ function AppMain() {
 					refreshLoading={inventoryLoading}
 					lastRefreshAt={inventoryLastRefreshAt}
 					use24HourClock={use24HourClock}
+					inventoryError={inventoryError}
 				/>
 			)}
 			<main className="flex-1 min-w-0 min-h-0 p-2 pb-0">
 				{activeTab === "foundry" ? (
-					<FoundryPage error={error} />
+					<FoundryPage error={foundryError} />
 				) : activeTab === "mastery-helper" ? (
 					<div className="h-full">
 						<MasteryHelperPage />
@@ -2013,7 +2015,7 @@ function AppMain() {
 									);
 								}}
 								indexLoading={indexLoading}
-								error={error}
+								error={appError}
 								assets={assets}
 								inventory={inventory}
 								eeLogPath={eeLogPath}

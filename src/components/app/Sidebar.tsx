@@ -17,6 +17,7 @@ interface SidebarProps {
 	refreshLoading: boolean;
 	lastRefreshAt: number | null;
 	use24HourClock: boolean;
+	inventoryError?: string;
 }
 
 export function Sidebar({
@@ -26,6 +27,7 @@ export function Sidebar({
 	refreshLoading,
 	lastRefreshAt,
 	use24HourClock,
+	inventoryError,
 }: SidebarProps) {
 	const lastRefreshLabel = lastRefreshAt
 		? formatClockTime(lastRefreshAt, use24HourClock)
@@ -168,6 +170,11 @@ export function Sidebar({
 					<p className="hidden px-3 text-xs text-muted-foreground md:block">
 						Last refresh: {lastRefreshLabel}
 					</p>
+					{inventoryError ? (
+						<p className="hidden px-3 text-xs text-destructive md:block">
+							{inventoryError}
+						</p>
+					) : null}
 					<Button
 						variant="secondary"
 						onClick={onRefresh}
