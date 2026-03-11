@@ -21,6 +21,7 @@ import {
 	setAppActiveTab,
 	setAppCompanions,
 	setAppEeLogPath,
+	setAppPendingRecipes,
 	setAppRelicOverlayEnabled,
 	setAppRelicScannerEnabled,
 	setAppRelicScannerHotkey,
@@ -35,11 +36,13 @@ import {
 import type {
 	InventoryCompanionEntry,
 	InventoryMiscItem,
+	InventoryPendingRecipeEntry,
 	InventoryWeaponEntry,
 	ManifestEntry,
 	OwnedCompanion,
 	OwnedRelic,
 	OwnedWeapon,
+	PendingRecipe,
 	RelicScanEntry,
 	RelicScanRewardValue,
 	RelicScanStatus,
@@ -485,7 +488,8 @@ function AppMain() {
 					companionNames[rewardName] ||
 					recipeDisplayNameByUniqueName.get(rewardName) ||
 					getRewardFallbackName(rewardName);
-				const textureLocation = manifestTextureByUniqueName.get(rewardName) || "";
+				const textureLocation =
+					manifestTextureByUniqueName.get(rewardName) || "";
 				const imageUrl = textureLocation
 					? `http://content.warframe.com/PublicExport${textureLocation}`
 					: "";
@@ -584,13 +588,17 @@ function AppMain() {
 			};
 
 			const recipeEntries =
-				(inventoryData.Recipes as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+				(inventoryData.Recipes as
+					| Array<{ ItemType?: string; ItemCount?: number }>
+					| undefined) ?? [];
 			for (const entry of recipeEntries) {
 				addOwnedType(entry.ItemType, Math.max(1, entry.ItemCount ?? 1));
 			}
 
 			const miscEntries =
-				(inventoryData.MiscItems as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+				(inventoryData.MiscItems as
+					| Array<{ ItemType?: string; ItemCount?: number }>
+					| undefined) ?? [];
 			for (const entry of miscEntries) {
 				addOwnedType(entry.ItemType, entry.ItemCount ?? 0);
 			}
@@ -613,13 +621,17 @@ function AppMain() {
 
 			for (const key of inventoryKeys) {
 				const entries =
-					(inventoryData[key] as Array<{ ItemType?: string }> | undefined) ?? [];
+					(inventoryData[key] as Array<{ ItemType?: string }> | undefined) ??
+					[];
 				for (const entry of entries) {
 					addOwnedType(entry.ItemType, 1);
 				}
 			}
 		} catch (err) {
-			console.error("Failed to derive scanner reward owned counts from inventory:", err);
+			console.error(
+				"Failed to derive scanner reward owned counts from inventory:",
+				err,
+			);
 		}
 
 		return ownedCounts;
@@ -631,18 +643,22 @@ function AppMain() {
 				const lookupReward = scannerRewardByName.get(reward.rewardName);
 				const setPieces =
 					lookupReward?.setKey && scannerSetPiecesByKey.has(lookupReward.setKey)
-						? (scannerSetPiecesByKey.get(lookupReward.setKey) ?? []).map((piece) => ({
-							...piece,
-							ownedCount: ownedScannerRewardCounts.get(piece.rewardName) ?? 0,
-						}))
+						? (scannerSetPiecesByKey.get(lookupReward.setKey) ?? []).map(
+								(piece) => ({
+									...piece,
+									ownedCount:
+										ownedScannerRewardCounts.get(piece.rewardName) ?? 0,
+								}),
+							)
 						: [
-							{
-								rewardName: reward.rewardName,
-								displayName: reward.displayName,
-								imageUrl: lookupReward?.imageUrl ?? "",
-								ownedCount: ownedScannerRewardCounts.get(reward.rewardName) ?? 0,
-							},
-						];
+								{
+									rewardName: reward.rewardName,
+									displayName: reward.displayName,
+									imageUrl: lookupReward?.imageUrl ?? "",
+									ownedCount:
+										ownedScannerRewardCounts.get(reward.rewardName) ?? 0,
+								},
+							];
 
 				return {
 					...reward,
@@ -758,7 +774,8 @@ function AppMain() {
 
 					if (containsMatches.length > 0) {
 						const bestContains = containsMatches.sort(
-							(a, b) => b.normalizedDisplayName.length - a.normalizedDisplayName.length,
+							(a, b) =>
+								b.normalizedDisplayName.length - a.normalizedDisplayName.length,
 						)[0];
 
 						normalizedRewardName = bestContains.rewardName;
@@ -769,22 +786,22 @@ function AppMain() {
 								Math.max(normalizedCandidate.length, 1),
 						);
 					} else {
-					let best: {
-						rewardName: string;
-						displayName: string;
-						normalizedDisplayName: string;
-						distance: number;
-					} | null = null;
+						let best: {
+							rewardName: string;
+							displayName: string;
+							normalizedDisplayName: string;
+							distance: number;
+						} | null = null;
 
-					for (const entry of scannerRewardLookup) {
-						const distance = levenshteinDistance(
-							normalizedCandidate,
-							entry.normalizedDisplayName,
-						);
-						if (!best || distance < best.distance) {
-							best = { ...entry, distance };
+						for (const entry of scannerRewardLookup) {
+							const distance = levenshteinDistance(
+								normalizedCandidate,
+								entry.normalizedDisplayName,
+							);
+							if (!best || distance < best.distance) {
+								best = { ...entry, distance };
+							}
 						}
-					}
 
 						if (!best) {
 							continue;
@@ -824,7 +841,9 @@ function AppMain() {
 					rewardName: normalizedRewardName,
 					displayName: resolvedDisplayName,
 					position:
-						index >= 0 && index < 4 ? ((index + 1) as 1 | 2 | 3 | 4) : undefined,
+						index >= 0 && index < 4
+							? ((index + 1) as 1 | 2 | 3 | 4)
+							: undefined,
 					platinum,
 					ducats,
 					confidence,
@@ -903,11 +922,7 @@ function AppMain() {
 			void emitTo("relic-overlay", "relic-scan-overlay", overlayPayload);
 			void emit("relic-scan-overlay", overlayPayload);
 		},
-		[
-			buildOverlayRewards,
-			buildRewardGuessDebug,
-			resolveScannerRewardValues,
-		],
+		[buildOverlayRewards, buildRewardGuessDebug, resolveScannerRewardValues],
 	);
 
 	const persistEeLogPath = useCallback((value: string) => {
@@ -1058,21 +1073,23 @@ function AppMain() {
 					}),
 				);
 			} catch (err) {
-				console.error("Failed to persist scanner settings before restart:", err);
+				console.error(
+					"Failed to persist scanner settings before restart:",
+					err,
+				);
 			}
 
 			setAppRelicOverlayEnabled(nextEnabled);
 			try {
 				await invoke("restart_app");
 			} catch (err) {
-				console.error("Failed to restart app after overlay setting change:", err);
+				console.error(
+					"Failed to restart app after overlay setting change:",
+					err,
+				);
 			}
 		},
-		[
-			normalizedRelicScannerHotkey,
-			relicOverlayEnabled,
-			relicScannerEnabled,
-		],
+		[normalizedRelicScannerHotkey, relicOverlayEnabled, relicScannerEnabled],
 	);
 
 	useEffect(() => {
@@ -1532,6 +1549,54 @@ function AppMain() {
 				manifestMap.set(entry.uniqueName, entry.textureLocation);
 			}
 
+			const recipeByUniqueName = new Map<string, { resultType: string }>();
+			for (const recipe of Object.values(recipeData)) {
+				recipeByUniqueName.set(recipe.uniqueName, {
+					resultType: recipe.resultType,
+				});
+			}
+
+			const pendingRecipeEntries: InventoryPendingRecipeEntry[] =
+				inventoryData.PendingRecipes || [];
+			const pendingRecipes: PendingRecipe[] = pendingRecipeEntries
+				.map((entry) => {
+					const completionLong = entry.CompletionDate?.$date?.$numberLong;
+					const completionTimestamp =
+						typeof completionLong === "string" ? Number(completionLong) : NaN;
+
+					if (!entry.ItemType || !Number.isFinite(completionTimestamp)) {
+						return null;
+					}
+
+					const recipe = recipeByUniqueName.get(entry.ItemType);
+					const resultType = recipe?.resultType ?? entry.ItemType;
+					const fallbackName = resultType.split("/").pop() || "Recipe";
+					const displayName =
+						weaponNames[resultType] ||
+						warframeNames[resultType] ||
+						companionNames[resultType] ||
+						resourceNames[resultType] ||
+						fallbackName;
+					const textureLocation = manifestMap.get(resultType) || "";
+					const imageUrl = textureLocation
+						? `http://content.warframe.com/PublicExport${textureLocation}`
+						: "";
+
+					return {
+						itemType: entry.ItemType,
+						resultType,
+						name: displayName,
+						imageUrl,
+						completionTimestamp,
+					};
+				})
+				.filter((entry): entry is PendingRecipe => entry !== null)
+				.sort((a, b) => a.completionTimestamp - b.completionTimestamp);
+			setAppPendingRecipes(pendingRecipes);
+			const pendingRecipeTypes = new Set(
+				pendingRecipes.map((recipe) => recipe.itemType),
+			);
+
 			const wfList: Warframe[] = Object.entries(warframeData).map(
 				([uniqueName, warframeInfo]) => {
 					const displayName = warframeInfo.name;
@@ -1563,8 +1628,12 @@ function AppMain() {
 					parts = [
 						{
 							name: "Blueprint",
+							itemType: mainRecipe?.uniqueName,
 							owned: hasMainBlueprint,
 							hasRecipe: hasMainBlueprint,
+							isCraftingRecipe: mainRecipe
+								? pendingRecipeTypes.has(mainRecipe.uniqueName)
+								: false,
 							imageUrl: mainBlueprintIcon,
 						},
 					];
@@ -1572,9 +1641,13 @@ function AppMain() {
 					if (mainRecipe) {
 						for (const ingredient of mainRecipe.ingredients) {
 							const itemType = ingredient.ItemType;
-							const hasRecipe = ownedBlueprints.has(
-								itemType.replace("Component", "Blueprint"),
+							const ingredientRecipeType = itemType.replace(
+								"Component",
+								"Blueprint",
 							);
+							const hasRecipe = ownedBlueprints.has(ingredientRecipeType);
+							const isCraftingRecipe =
+								pendingRecipeTypes.has(ingredientRecipeType);
 							const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
 							const hasEnoughMaterials =
 								ownedMaterialCount >= ingredient.ItemCount;
@@ -1592,9 +1665,11 @@ function AppMain() {
 
 							parts.push({
 								name: partName,
+								itemType,
 								count: ingredient.ItemCount,
 								owned: hasRecipe || hasEnoughMaterials,
 								hasRecipe,
+								isCraftingRecipe,
 								imageUrl: partIcon,
 							});
 						}
@@ -1650,10 +1725,12 @@ function AppMain() {
 
 							return {
 								name: requirementName,
+								itemType,
 								count: ingredient.ItemCount,
 								imageUrl: requirementImageUrl,
 								owned: hasRecipe || hasEnoughMaterials,
 								hasRecipe,
+								isCraftingRecipe: pendingRecipeTypes.has(itemType),
 							};
 						}) || [];
 
@@ -1706,10 +1783,12 @@ function AppMain() {
 
 							return {
 								name: requirementName,
+								itemType,
 								count: ingredient.ItemCount,
 								imageUrl: requirementImageUrl,
 								owned: hasRecipe || hasEnoughMaterials,
 								hasRecipe,
+								isCraftingRecipe: pendingRecipeTypes.has(itemType),
 							};
 						}) || [];
 
@@ -1759,6 +1838,7 @@ function AppMain() {
 			setAppWarframes([]);
 			setAppWeapons([]);
 			setAppCompanions([]);
+			setAppPendingRecipes([]);
 			return;
 		}
 

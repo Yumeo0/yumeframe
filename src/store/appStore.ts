@@ -4,6 +4,7 @@ import type {
 	OwnedCompanion,
 	OwnedRelic,
 	OwnedWeapon,
+	PendingRecipe,
 	RelicScanEntry,
 	Warframe,
 } from "@/types";
@@ -34,6 +35,7 @@ export interface AppState {
 	warframes: Warframe[];
 	weapons: OwnedWeapon[];
 	companions: OwnedCompanion[];
+	pendingRecipes: PendingRecipe[];
 	relics: OwnedRelic[];
 	visibleRewardNames: string[];
 	rewardPlatinumValues: Record<string, number>;
@@ -55,6 +57,7 @@ export const appStore = new Store<AppState>({
 	warframes: [],
 	weapons: [],
 	companions: [],
+	pendingRecipes: [],
 	relics: [],
 	visibleRewardNames: [],
 	rewardPlatinumValues: {},
@@ -110,6 +113,10 @@ export function setAppWeapons(value: Updater<OwnedWeapon[]>) {
 
 export function setAppCompanions(value: Updater<OwnedCompanion[]>) {
 	updateStoreSlice("companions", value);
+}
+
+export function setAppPendingRecipes(value: Updater<PendingRecipe[]>) {
+	updateStoreSlice("pendingRecipes", value);
 }
 
 export function setAppRelics(value: Updater<OwnedRelic[]>) {

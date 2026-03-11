@@ -1,5 +1,6 @@
 import { useStore } from "@tanstack/react-store";
 import { Loader2, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +14,8 @@ export type FoundryFilter =
 	| "secondary"
 	| "melee"
 	| "modular"
-	| "companions";
+	| "companions"
+	| "pending";
 
 interface FoundryPageProps {
 	error: string;
@@ -26,6 +28,7 @@ interface CollectionPart {
 	owned?: boolean;
 	count?: number;
 	hasRecipe?: boolean;
+	isCraftingRecipe?: boolean;
 }
 
 interface CollectionItem {
@@ -39,7 +42,16 @@ interface CollectionItem {
 	imageUrl: string;
 	favorite: boolean;
 	owned: boolean;
+	isCraftingRecipe?: boolean;
 	parts: CollectionPart[];
+}
+
+interface PendingRecipeItem {
+	itemType: string;
+	resultType: string;
+	name: string;
+	imageUrl: string;
+	completionTimestamp: number;
 }
 
 function getTotalAffinityForLevel(level: number, isWeapon: boolean): number {
@@ -67,7 +79,7 @@ function CollectionSection({
 	return (
 		<div>
 			{items.length > 0 ? (
-				<div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+				<div className="grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
 					{items.map((item) =>
 						(() => {
 							const mastered = isItemMastered(item);
@@ -79,7 +91,7 @@ function CollectionSection({
 							return (
 								<Card
 									key={item.key}
-									className={`overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : ""} py-3 gap-0`}
+									className={`overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
 								>
 									<CardHeader>
 										<div className="flex items-start justify-between">
@@ -168,7 +180,7 @@ function CollectionSection({
 																<img
 																	src={part.imageUrl}
 																	alt={part.name}
-																	className={`w-12 aspect-square rounded object-cover ${part.owned === undefined ? "border" : part.hasRecipe ? "border-2 border-primary/60" : part.owned ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
+																	className={`w-12 aspect-square rounded object-cover ${part.owned === undefined ? "border" : part.isCraftingRecipe ? "border-2 border-amber-500/70 bg-amber-500/10" : part.hasRecipe ? "border-2 border-primary/60" : part.owned ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
 																/>
 																{part.count ? (
 																	<span className="absolute -bottom-1 left-1/2 min-w-5 h-5 px-1 rounded bg-secondary text-secondary-foreground text-[10px] flex items-center justify-center">
@@ -201,12 +213,115 @@ function CollectionSection({
 	);
 }
 
+function formatRemainingTime(msRemaining: number): string {
+	if (msRemaining <= 0) {
+		return "Ready";
+	}
+
+	const totalSeconds = Math.floor(msRemaining / 1000);
+	const days = Math.floor(totalSeconds / 86400);
+	const hours = Math.floor((totalSeconds % 86400) / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+
+	if (days > 0) {
+		return `${days}d ${hours}h ${minutes}m`;
+	}
+
+	if (hours > 0) {
+		return `${hours}h ${minutes}m ${seconds}s`;
+	}
+
+	return `${minutes}m ${seconds}s`;
+}
+
+interface PendingRecipesSectionProps {
+	pendingRecipes: PendingRecipeItem[];
+	now: number;
+	loading: boolean;
+}
+
+function PendingRecipesSection({
+	pendingRecipes,
+	now,
+	loading,
+}: PendingRecipesSectionProps) {
+	return (
+		<div>
+			{pendingRecipes.length > 0 ? (
+				<div className="grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{pendingRecipes.map((recipe) => {
+						const remaining = recipe.completionTimestamp - now;
+						const isReady = remaining <= 0;
+
+						return (
+							<Card
+								key={`${recipe.itemType}-${recipe.completionTimestamp}`}
+								className={`overflow-hidden py-3 gap-0 ${isReady ? "ring-2 ring-green-500/50 bg-green-500/20" : "ring-2 ring-amber-500/60 bg-amber-500/15"}`}
+							>
+								<CardHeader>
+									<CardTitle className="text-base">{recipe.name}</CardTitle>
+								</CardHeader>
+								<CardContent>
+									<div className="flex items-center gap-3">
+										<img
+											src={recipe.imageUrl}
+											alt={recipe.name}
+											className="object-cover w-16 h-16 rounded-md"
+										/>
+										<div className="text-sm">
+											<p className="font-medium">
+												{isReady ? "Ready to claim" : "Crafting"}
+											</p>
+											<p className="text-muted-foreground">
+												{formatRemainingTime(remaining)}
+											</p>
+											<p className="text-xs text-muted-foreground">
+												Done: {new Date(recipe.completionTimestamp).toLocaleString()}
+											</p>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						);
+					})}
+				</div>
+			) : (
+				<Card>
+					<CardContent className="pt-6 text-center text-muted-foreground">
+						{loading
+							? "Loading pending recipes..."
+							: "No pending recipes found"}
+					</CardContent>
+				</Card>
+			)}
+		</div>
+	);
+}
+
 export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 	const foundryFilter = useStore(appStore, (state) => state.foundryFilter);
 	const warframes = useStore(appStore, (state) => state.warframes);
 	const weapons = useStore(appStore, (state) => state.weapons);
 	const companions = useStore(appStore, (state) => state.companions);
+	const pendingRecipes = useStore(appStore, (state) => state.pendingRecipes);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
+	const [now, setNow] = useState(() => Date.now());
+
+	useEffect(() => {
+		const timer = window.setInterval(() => {
+			setNow(Date.now());
+		}, 1000);
+
+		return () => {
+			window.clearInterval(timer);
+		};
+	}, []);
+
+	const pendingRecipeResultTypes = useMemo(
+		() => new Set(pendingRecipes.map((recipe) => recipe.resultType)),
+		[pendingRecipes],
+	);
 	const regularWarframes = warframes.filter(
 		(wf) => !wf.displayName.startsWith("<ARCHWING>"),
 	);
@@ -243,12 +358,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: wf.imageUrl,
 		favorite: wf.favorite,
 		owned: wf.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(wf.type),
 		parts: wf.parts.map((part) => ({
 			name: part.name,
 			count: part.count,
 			imageUrl: part.imageUrl,
 			owned: part.owned,
 			hasRecipe: part.hasRecipe,
+			isCraftingRecipe: part.isCraftingRecipe,
 		})),
 	}));
 
@@ -262,12 +379,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: wf.imageUrl,
 		favorite: wf.favorite,
 		owned: wf.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(wf.type),
 		parts: wf.parts.map((part) => ({
 			name: part.name,
 			count: part.count,
 			imageUrl: part.imageUrl,
 			owned: part.owned,
 			hasRecipe: part.hasRecipe,
+			isCraftingRecipe: part.isCraftingRecipe,
 		})),
 	}));
 
@@ -283,12 +402,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 			imageUrl: weapon.imageUrl,
 			favorite: weapon.favorite,
 			owned: weapon.owned,
+			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 			parts: weapon.requirements.map((requirement) => ({
 				name: requirement.name,
 				count: requirement.count,
 				imageUrl: requirement.imageUrl,
 				owned: requirement.owned,
 				hasRecipe: requirement.hasRecipe,
+				isCraftingRecipe: requirement.isCraftingRecipe,
 			})),
 		}),
 	);
@@ -324,12 +445,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: weapon.imageUrl,
 		favorite: weapon.favorite,
 		owned: weapon.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 		parts: weapon.requirements.map((requirement) => ({
 			name: requirement.name,
 			count: requirement.count,
 			imageUrl: requirement.imageUrl,
 			owned: requirement.owned,
 			hasRecipe: requirement.hasRecipe,
+			isCraftingRecipe: requirement.isCraftingRecipe,
 		})),
 	}));
 
@@ -344,12 +467,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: weapon.imageUrl,
 		favorite: weapon.favorite,
 		owned: weapon.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 		parts: weapon.requirements.map((requirement) => ({
 			name: requirement.name,
 			count: requirement.count,
 			imageUrl: requirement.imageUrl,
 			owned: requirement.owned,
 			hasRecipe: requirement.hasRecipe,
+			isCraftingRecipe: requirement.isCraftingRecipe,
 		})),
 	}));
 
@@ -364,12 +489,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: weapon.imageUrl,
 		favorite: weapon.favorite,
 		owned: weapon.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 		parts: weapon.requirements.map((requirement) => ({
 			name: requirement.name,
 			count: requirement.count,
 			imageUrl: requirement.imageUrl,
 			owned: requirement.owned,
 			hasRecipe: requirement.hasRecipe,
+			isCraftingRecipe: requirement.isCraftingRecipe,
 		})),
 	}));
 
@@ -384,12 +511,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		imageUrl: weapon.imageUrl,
 		favorite: weapon.favorite,
 		owned: weapon.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 		parts: weapon.requirements.map((requirement) => ({
 			name: requirement.name,
 			count: requirement.count,
 			imageUrl: requirement.imageUrl,
 			owned: requirement.owned,
 			hasRecipe: requirement.hasRecipe,
+			isCraftingRecipe: requirement.isCraftingRecipe,
 		})),
 	}));
 
@@ -404,12 +533,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 			imageUrl: companion.imageUrl,
 			favorite: companion.favorite,
 			owned: companion.owned,
+			isCraftingRecipe: pendingRecipeResultTypes.has(companion.type),
 			parts: companion.requirements.map((requirement) => ({
 				name: requirement.name,
 				count: requirement.count,
 				imageUrl: requirement.imageUrl,
 				owned: requirement.owned,
 				hasRecipe: requirement.hasRecipe,
+				isCraftingRecipe: requirement.isCraftingRecipe,
 			})),
 		}),
 	);
@@ -426,15 +557,25 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 			imageUrl: weapon.imageUrl,
 			favorite: weapon.favorite,
 			owned: weapon.owned,
+			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
 			parts: weapon.requirements.map((requirement) => ({
 				name: requirement.name,
 				count: requirement.count,
 				imageUrl: requirement.imageUrl,
 				owned: requirement.owned,
 				hasRecipe: requirement.hasRecipe,
+				isCraftingRecipe: requirement.isCraftingRecipe,
 			})),
 		}),
 	);
+
+	const pendingRecipeItems: PendingRecipeItem[] = pendingRecipes.map((recipe) => ({
+		itemType: recipe.itemType,
+		resultType: recipe.resultType,
+		name: recipe.name,
+		imageUrl: recipe.imageUrl,
+		completionTimestamp: recipe.completionTimestamp,
+	}));
 
 	const companionItems = [
 		...companionCompanionItems,
@@ -625,6 +766,29 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 						</span>
 					</Button>
 					<Button
+						variant={foundryFilter === "pending" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("pending")}
+						className={getFilterButtonClasses(foundryFilter === "pending")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "pending" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_foundry.svg")',
+								WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span className={getFilterLabelClasses(foundryFilter === "pending")}>
+							Pending
+						</span>
+					</Button>
+					<Button
 						onClick={onRefresh}
 						disabled={loading}
 						variant="secondary"
@@ -714,6 +878,14 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 							loading={loading}
 							emptyLoadingText="Loading companion data..."
 							emptyIdleText="Click refresh to load companion data"
+						/>
+					)}
+
+					{foundryFilter === "pending" && (
+						<PendingRecipesSection
+							pendingRecipes={pendingRecipeItems}
+							now={now}
+							loading={loading}
 						/>
 					)}
 				</div>

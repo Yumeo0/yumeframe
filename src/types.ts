@@ -90,10 +90,12 @@ export interface ExportRecipesWrapper {
 
 export interface WarframePart {
 	name: string;
+	itemType?: string;
 	owned: boolean;
 	imageUrl: string;
 	count?: number;
 	hasRecipe?: boolean;
+	isCraftingRecipe?: boolean;
 }
 
 export interface Warframe {
@@ -127,10 +129,12 @@ export interface OwnedWeapon extends ExportWeaponEntry {
 
 export interface WeaponCraftRequirement {
 	name: string;
+	itemType?: string;
 	count: number;
 	imageUrl: string;
 	owned?: boolean;
 	hasRecipe?: boolean;
+	isCraftingRecipe?: boolean;
 }
 
 // ============================================
@@ -543,6 +547,23 @@ export interface ExportResourcesWrapper {
 export interface InventoryMiscItem {
 	ItemType: string;
 	ItemCount: number;
+}
+
+export interface InventoryPendingRecipeEntry {
+	ItemType: string;
+	CompletionDate?: {
+		$date?: {
+			$numberLong?: string;
+		};
+	};
+}
+
+export interface PendingRecipe {
+	itemType: string;
+	resultType: string;
+	name: string;
+	imageUrl: string;
+	completionTimestamp: number;
 }
 
 // ============================================
