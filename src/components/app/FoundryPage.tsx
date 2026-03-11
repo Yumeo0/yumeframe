@@ -77,6 +77,7 @@ interface CollectionSectionProps {
 	emptyLoadingText: string;
 	emptyIdleText: string;
 	onOpenCraftingTree: (item: CollectionItem) => void;
+	isIngredientItem: (item: CollectionItem) => boolean;
 }
 
 function CollectionSection({
@@ -85,6 +86,7 @@ function CollectionSection({
 	emptyLoadingText,
 	emptyIdleText,
 	onOpenCraftingTree,
+	isIngredientItem,
 }: CollectionSectionProps) {
 	return (
 		<div>
@@ -93,6 +95,8 @@ function CollectionSection({
 					{items.map((item) =>
 						(() => {
 							const mastered = isItemMastered(item);
+							const ingredient = isIngredientItem(item);
+							const isPrime = item.displayName.toLowerCase().includes("prime");
 							const requiredAffinity = getTotalAffinityForLevel(
 								item.maxLevel,
 								item.isWeapon,
@@ -120,7 +124,7 @@ function CollectionSection({
 												</CardTitle>
 											</div>
 											<div className="inline-flex items-center gap-1.5 mb-2 text-sm text-muted-foreground">
-												{item.isSubsumed !== undefined ? (
+												{item.isSubsumed !== undefined && !isPrime ? (
 													<span
 														title={item.isSubsumed ? "Already subsumed" : "Not subsumed yet"}
 														className="inline-flex"
@@ -137,6 +141,32 @@ function CollectionSection({
 																style={{
 																	maskImage: 'url("/icons/helminth/icon_empower.svg")',
 																	WebkitMaskImage: 'url("/icons/helminth/icon_empower.svg")',
+																	maskRepeat: "no-repeat",
+																	WebkitMaskRepeat: "no-repeat",
+																	maskPosition: "center",
+																	WebkitMaskPosition: "center",
+																	maskSize: "contain",
+																	WebkitMaskSize: "contain",
+																}}
+															/>
+														</span>
+													</span>
+												) : null}
+												{ingredient ? (
+													<span
+														title="Used as crafting ingredient"
+														className="inline-flex"
+													>
+														<span
+															aria-hidden="true"
+															className="relative inline-block w-6 h-6 shrink-0"
+														>
+															<span className="absolute inset-0 rounded-full bg-amber-500/60 blur-sm" />
+															<span
+																className="relative inline-block w-6 h-6 bg-primary"
+																style={{
+																	maskImage: 'url("/icons/icon_foundry.svg")',
+																	WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
 																	maskRepeat: "no-repeat",
 																	WebkitMaskRepeat: "no-repeat",
 																	maskPosition: "center",
@@ -736,6 +766,10 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		`whitespace-nowrap overflow-hidden transition-all duration-200 ${active ? "max-w-24 opacity-100" : "max-w-0 opacity-0 group-hover:max-w-24 group-hover:opacity-100"}`;
 
 	const isCraftingTreeOpen = craftingTreeItem !== null;
+	const isIngredientItem = useCallback(
+		(item: CollectionItem) => ingredientItemKeys.has(item.key),
+		[ingredientItemKeys],
+	);
 
 	return (
 		<div className="flex flex-col h-full min-h-0">
@@ -1056,6 +1090,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading item data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load item data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1066,6 +1101,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading warframe data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1076,6 +1112,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading archwing data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1086,6 +1123,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading primary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1096,6 +1134,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading secondary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1106,6 +1145,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading melee weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1116,6 +1156,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading modular weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
@@ -1126,6 +1167,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							emptyLoadingText="Loading companion data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
 							onOpenCraftingTree={setCraftingTreeItem}
+							isIngredientItem={isIngredientItem}
 						/>
 					)}
 
