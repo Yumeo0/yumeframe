@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { appStore, setAppFoundryFilter } from "@/store/appStore";
 
@@ -52,6 +53,7 @@ interface PendingRecipeItem {
 	name: string;
 	imageUrl: string;
 	completionTimestamp: number;
+	buildTime?: number;
 }
 
 function getTotalAffinityForLevel(level: number, isWeapon: boolean): number {
@@ -251,12 +253,29 @@ function PendingRecipesSection({
 			{pendingRecipes.length > 0 ? (
 				<div className="grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{pendingRecipes.map((recipe) => {
+						const recipeKey = `${recipe.itemType}-${recipe.completionTimestamp}`;
 						const remaining = recipe.completionTimestamp - now;
 						const isReady = remaining <= 0;
+						const totalBuildTimeMs =
+							typeof recipe.buildTime === "number" && recipe.buildTime > 0
+								? recipe.buildTime * 1000
+								: 0;
+						const progressValue =
+							isReady || totalBuildTimeMs <= 0
+								? 100
+								: Math.min(
+										100,
+										Math.max(
+											0,
+											((totalBuildTimeMs - Math.max(remaining, 0)) /
+												totalBuildTimeMs) *
+												100,
+										),
+								  );
 
 						return (
 							<Card
-								key={`${recipe.itemType}-${recipe.completionTimestamp}`}
+								key={recipeKey}
 								className={`overflow-hidden py-3 gap-0 ${isReady ? "ring-2 ring-green-500/50 bg-green-500/20" : "ring-2 ring-amber-500/60 bg-amber-500/15"}`}
 							>
 								<CardHeader>
@@ -279,6 +298,7 @@ function PendingRecipesSection({
 											<p className="text-xs text-muted-foreground">
 												Done: {new Date(recipe.completionTimestamp).toLocaleString()}
 											</p>
+											<Progress value={progressValue} className="h-2 mt-2" />
 										</div>
 									</div>
 								</CardContent>
@@ -575,6 +595,7 @@ export function FoundryPage({ error, onRefresh }: FoundryPageProps) {
 		name: recipe.name,
 		imageUrl: recipe.imageUrl,
 		completionTimestamp: recipe.completionTimestamp,
+		buildTime: recipe.buildTime,
 	}));
 
 	const companionItems = [

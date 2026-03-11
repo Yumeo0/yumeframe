@@ -15,7 +15,7 @@ interface SidebarProps {
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 	return (
 		<aside className="flex w-14 shrink-0 flex-col border-r bg-card p-2 transition-[width] duration-150 md:w-56">
-			<div className="mb-4 flex items-center justify-center gap-3 px-2 py-3 md:justify-start">
+			<div className="flex items-center justify-center gap-3 px-2 py-3 mb-4 md:justify-start">
 				<span
 					aria-hidden="true"
 					className={`h-8 w-8 shrink-0 bg-foreground`}
@@ -33,12 +33,12 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 				<h1 className="hidden text-2xl font-bold md:block">YumeFrame</h1>
 			</div>
 
-			<nav className="flex h-full flex-col justify-between">
+			<nav className="flex flex-col justify-between h-full">
 				<div className="space-y-2">
 
 				<Button
 					variant={activeTab === "foundry" ? "default" : "ghost"}
-					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					aria-label="Foundry"
 					onClick={() => onTabChange("foundry")}
 				>
@@ -60,7 +60,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 				</Button>
 				<Button
 					variant={activeTab === "mastery-helper" ? "default" : "ghost"}
-					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					aria-label="Mastery Helper"
 					onClick={() => onTabChange("mastery-helper")}
 				>
@@ -82,7 +82,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 				</Button>
 				<Button
 					variant={activeTab === "relic-planner" ? "default" : "ghost"}
-					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					aria-label="Relic Planner"
 					onClick={() => onTabChange("relic-planner")}
 				>
@@ -90,8 +90,8 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 						aria-hidden="true"
 						className={`h-6 w-6 shrink-0 ${activeTab === "relic-planner" ? "bg-primary-foreground" : "bg-foreground"}`}
 						style={{
-							maskImage: 'url("/icons/icon_appearance.svg")',
-							WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
+							maskImage: 'url("/icons/icon_relic.svg")',
+							WebkitMaskImage: 'url("/icons/icon_relic.svg")',
 							maskRepeat: "no-repeat",
 							WebkitMaskRepeat: "no-repeat",
 							maskPosition: "center",
@@ -104,7 +104,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 				</Button>
 				<Button
 					variant={activeTab === "relic-scanner" ? "default" : "ghost"}
-					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					aria-label="Relic Scanner"
 					onClick={() => onTabChange("relic-scanner")}
 				>
@@ -112,8 +112,8 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 						aria-hidden="true"
 						className={`h-6 w-6 shrink-0 ${activeTab === "relic-scanner" ? "bg-primary-foreground" : "bg-foreground"}`}
 						style={{
-							maskImage: 'url("/icons/icon_archwing.svg")',
-							WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
+							maskImage: 'url("/icons/icon_reactant.svg")',
+							WebkitMaskImage: 'url("/icons/icon_reactant.svg")',
 							maskRepeat: "no-repeat",
 							WebkitMaskRepeat: "no-repeat",
 							maskPosition: "center",
@@ -127,7 +127,7 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
 				</div>
 				<Button
 					variant={activeTab === "settings" ? "default" : "ghost"}
-					className="w-full justify-center gap-2 px-2 md:justify-start md:px-3"
+					className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					aria-label="Settings"
 					onClick={() => onTabChange("settings")}
 				>

@@ -1555,10 +1555,14 @@ function AppMain() {
 				manifestMap.set(entry.uniqueName, entry.textureLocation);
 			}
 
-			const recipeByUniqueName = new Map<string, { resultType: string }>();
+			const recipeByUniqueName = new Map<
+				string,
+				{ resultType: string; buildTime?: number }
+			>();
 			for (const recipe of Object.values(recipeData)) {
 				recipeByUniqueName.set(recipe.uniqueName, {
 					resultType: recipe.resultType,
+					buildTime: recipe.buildTime,
 				});
 			}
 
@@ -1576,6 +1580,7 @@ function AppMain() {
 
 					const recipe = recipeByUniqueName.get(entry.ItemType);
 					const resultType = recipe?.resultType ?? entry.ItemType;
+					const buildTime = recipe?.buildTime;
 					const fallbackName = resultType.split("/").pop() || "Recipe";
 					const displayName =
 						weaponNames[resultType] ||
@@ -1594,6 +1599,7 @@ function AppMain() {
 						name: displayName,
 						imageUrl,
 						completionTimestamp,
+						buildTime,
 					};
 				})
 				.filter((entry): entry is PendingRecipe => entry !== null)

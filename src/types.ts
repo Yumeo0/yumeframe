@@ -41,6 +41,7 @@ export interface RecipeIngredient {
 export interface RecipeData {
 	uniqueName: string;
 	resultType: string;
+	buildTime?: number;
 	primeSellingPrice?: number;
 	ingredients: RecipeIngredient[];
 }
@@ -80,6 +81,7 @@ export interface ExportWeaponsWrapper {
 export interface ExportRecipeEntry {
 	uniqueName: string;
 	resultType: string;
+	buildTime?: number;
 	primeSellingPrice?: number;
 	ingredients: RecipeIngredient[];
 }
@@ -564,6 +566,7 @@ export interface PendingRecipe {
 	name: string;
 	imageUrl: string;
 	completionTimestamp: number;
+	buildTime?: number;
 }
 
 // ============================================
