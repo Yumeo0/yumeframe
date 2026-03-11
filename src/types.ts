@@ -44,6 +44,7 @@ export interface RecipeData {
 	buildTime?: number;
 	primeSellingPrice?: number;
 	ingredients: RecipeIngredient[];
+	secretIngredients?: SecretIngredient[];
 }
 
 // Raw export data from Warframe API
@@ -84,6 +85,7 @@ export interface ExportRecipeEntry {
 	buildTime?: number;
 	primeSellingPrice?: number;
 	ingredients: RecipeIngredient[];
+	secretIngredients?: SecretIngredient[];
 }
 
 export interface ExportRecipesWrapper {

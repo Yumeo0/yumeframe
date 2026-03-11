@@ -67,6 +67,28 @@ export function useData() {
 			const normalizeStoreItemPath = (value: string) =>
 				value.replace("/StoreItems", "");
 
+			const getRecipeSpecificityScore = (recipe: ExportRecipeEntry): number => {
+				const ingredients = Array.isArray(recipe.ingredients)
+					? recipe.ingredients
+					: [];
+				const ingredientCount = ingredients.length;
+				const nonMiscIngredientCount = ingredients.filter((ingredient) => {
+					const category = ingredient.ProductCategory || "";
+					return category !== "MiscItems";
+				}).length;
+				const hasWeaponOrUnitRequirement = ingredients.some((ingredient) =>
+					["Melee", "LongGuns", "Pistols", "Sentinels", "Suits"].includes(
+						ingredient.ProductCategory || "",
+					),
+				);
+
+				return (
+					ingredientCount * 10 +
+					nonMiscIngredientCount * 50 +
+					(hasWeaponOrUnitRequirement ? 250 : 0)
+				);
+			};
+
 			const results = await Promise.allSettled([
 				invoke<string>("fetch_warframe_manifest", { assets }),
 				invoke<string>("fetch_warframe_data", { assets }),
@@ -148,7 +170,29 @@ export function useData() {
 				const ducatValues: Record<string, number> = {};
 				for (const recipe of data.ExportRecipes as ExportRecipeEntry[]) {
 					const normalizedResultType = normalizeStoreItemPath(recipe.resultType);
-					recipes[normalizedResultType] = recipe;
+					const normalizedRecipe: RecipeData = {
+						...recipe,
+						resultType: normalizedResultType,
+						ingredients: (recipe.ingredients || []).map((ingredient) => ({
+							...ingredient,
+							ItemType: normalizeStoreItemPath(ingredient.ItemType),
+						})),
+						secretIngredients: (recipe.secretIngredients || []).map((ingredient) => ({
+							...ingredient,
+							ItemType: normalizeStoreItemPath(ingredient.ItemType),
+						})),
+					};
+
+					const existingRecipe = recipes[normalizedResultType];
+					if (!existingRecipe) {
+						recipes[normalizedResultType] = normalizedRecipe;
+					} else {
+						const nextScore = getRecipeSpecificityScore(normalizedRecipe);
+						const previousScore = getRecipeSpecificityScore(existingRecipe);
+						if (nextScore > previousScore) {
+							recipes[normalizedResultType] = normalizedRecipe;
+						}
+					}
 					if (typeof recipe.primeSellingPrice === "number") {
 						const normalizedUniqueName = normalizeStoreItemPath(
 							recipe.uniqueName,
