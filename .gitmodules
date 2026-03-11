@@ -4,3 +4,6 @@
 [submodule "packages/wfm-api-client"]
 	path = packages/wfm-api-client
 	url = git@github.com:Yumeo0/wfm-api-client.git
+[submodule "packages/warframe-worldstate"]
+	path = packages/warframe-worldstate
+	url = git@github.com:Yumeo0/warframe-worldstate.git
