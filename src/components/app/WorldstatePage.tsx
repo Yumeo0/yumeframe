@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime } from "@/lib/datetime.utils";
-import { appStore } from "@/store/appStore";
+import { appStore, setAppPrimeResurgenceItemTypes } from "@/store/appStore";
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
@@ -215,6 +215,11 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			setWorldstate(parsed);
 			setLastUpdatedAt(Date.now());
 			setError(null);
+			setAppPrimeResurgenceItemTypes(
+				parsed.vaultTrader.inventory.map((item) =>
+					item.uniqueName.replace("/StoreItems", ""),
+				),
+			);
 		} catch (err) {
 			const message = err instanceof Error ? err.message : "Unknown error";
 			setError(`Failed to load worldstate: ${message}`);

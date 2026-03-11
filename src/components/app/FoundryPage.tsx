@@ -1,19 +1,22 @@
 import { useStore } from "@tanstack/react-store";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CraftingTreeModal } from "@/components/app/CraftingTreeModal";
 import type {
 	CollectionItem,
 	CollectionPart,
 } from "@/components/app/foundry.types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime } from "@/lib/datetime.utils";
 import { appStore, setAppFoundryFilter } from "@/store/appStore";
 
 export type FoundryFilter =
+	| "all"
 	| "warframes"
 	| "archwings"
 	| "primary"
@@ -43,6 +46,29 @@ function getTotalAffinityForLevel(level: number, isWeapon: boolean): number {
 
 function isItemMastered(item: CollectionItem): boolean {
 	return item.xp >= getTotalAffinityForLevel(item.maxLevel, item.isWeapon);
+}
+
+function TriStateFilterBadge({
+	label,
+	value,
+	onChange,
+}: {
+	label: string;
+	value: boolean | null;
+	onChange: (v: boolean | null) => void;
+}) {
+	const next = value === null ? true : value === true ? false : null;
+	return (
+		<Badge
+			variant={value === null ? "outline" : value ? "default" : "secondary"}
+			className="text-xs cursor-pointer select-none"
+			onClick={() => onChange(next)}
+		>
+			{value === true && "✓ "}
+			{value === false && "✗ "}
+			{label}
+		</Badge>
+	);
 }
 
 interface CollectionSectionProps {
@@ -320,10 +346,19 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	const pendingRecipes = useStore(appStore, (state) => state.pendingRecipes);
 	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
+	const primeResurgenceItemTypes = useStore(appStore, (state) => state.primeResurgenceItemTypes);
 	const [now, setNow] = useState(() => Date.now());
 	const [craftingTreeItem, setCraftingTreeItem] = useState<CollectionItem | null>(
 		null,
 	);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [filterPrime, setFilterPrime] = useState<boolean | null>(null);
+	const [filterMastered, setFilterMastered] = useState<boolean | null>(null);
+	const [filterOwned, setFilterOwned] = useState<boolean | null>(null);
+	const [filterReadyToBuild, setFilterReadyToBuild] = useState(false);
+	const [filterResurgence, setFilterResurgence] = useState(false);
+	const [filterIngredient, setFilterIngredient] = useState<boolean | null>(null);
+	const [filterHelminth, setFilterHelminth] = useState<boolean | null>(null);
 
 	useEffect(() => {
 		const timer = window.setInterval(() => {
@@ -551,15 +586,16 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	].sort((a, b) => a.displayName.localeCompare(b.displayName));
 
 	const allCollectionItems = useMemo(
-		() => [
-			...warframeItems,
-			...allArchwingItems,
-			...primaryItems,
-			...secondaryItems,
-			...meleeItems,
-			...modularWeaponItems,
-			...companionItems,
-		],
+		() =>
+			[
+				...warframeItems,
+				...allArchwingItems,
+				...primaryItems,
+				...secondaryItems,
+				...meleeItems,
+				...modularWeaponItems,
+				...companionItems,
+			].sort((a, b) => a.displayName.localeCompare(b.displayName)),
 		[
 			warframeItems,
 			allArchwingItems,
@@ -570,6 +606,128 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			companionItems,
 		],
 	);
+
+	const ingredientItemKeys = useMemo(() => {
+		const keys = new Set<string>();
+		const collectParts = (parts: CollectionPart[]) => {
+			for (const part of parts) {
+				if (part.itemType) {
+					keys.add(part.itemType);
+				}
+				if (part.requirements) {
+					collectParts(part.requirements);
+				}
+			}
+		};
+		for (const item of allCollectionItems) {
+			collectParts(item.parts);
+		}
+		return keys;
+	}, [allCollectionItems]);
+
+	const primeResurgenceItemTypeSet = useMemo(
+		() => new Set(primeResurgenceItemTypes),
+		[primeResurgenceItemTypes],
+	);
+
+	const filterItems = useCallback(
+		(items: CollectionItem[]) => {
+			let result = items;
+
+			if (searchQuery) {
+				const query = searchQuery.toLowerCase();
+				result = result.filter((item) =>
+					item.displayName.toLowerCase().includes(query),
+				);
+			}
+
+			if (filterPrime !== null) {
+				result = result.filter((item) => {
+					const isPrime = item.displayName.toLowerCase().includes("prime");
+					return filterPrime ? isPrime : !isPrime;
+				});
+			}
+
+			if (filterMastered !== null) {
+				result = result.filter((item) => {
+					const mastered = isItemMastered(item);
+					return filterMastered ? mastered : !mastered;
+				});
+			}
+
+			if (filterOwned !== null) {
+				result = result.filter((item) =>
+					filterOwned ? item.owned : !item.owned,
+				);
+			}
+
+			if (filterReadyToBuild) {
+				result = result.filter(
+					(item) =>
+						!item.owned &&
+						item.parts.length > 0 &&
+						item.parts.every((part) => part.owned || part.hasRecipe),
+				);
+			}
+
+			if (filterResurgence) {
+				result = result.filter((item) =>
+					primeResurgenceItemTypeSet.has(item.key),
+				);
+			}
+
+			if (filterIngredient !== null) {
+				result = result.filter((item) => {
+					const isIngredient = ingredientItemKeys.has(item.key);
+					return filterIngredient ? isIngredient : !isIngredient;
+				});
+			}
+
+			if (filterHelminth !== null) {
+				result = result.filter((item) => {
+					if (item.isSubsumed === undefined) {
+						return !filterHelminth;
+					}
+					return filterHelminth ? item.isSubsumed : !item.isSubsumed;
+				});
+			}
+
+			return result;
+		},
+		[
+			searchQuery,
+			filterPrime,
+			filterMastered,
+			filterOwned,
+			filterReadyToBuild,
+			filterResurgence,
+			filterIngredient,
+			filterHelminth,
+			primeResurgenceItemTypeSet,
+			ingredientItemKeys,
+		],
+	);
+
+	const hasActiveFilters =
+		searchQuery !== "" ||
+		filterPrime !== null ||
+		filterMastered !== null ||
+		filterOwned !== null ||
+		filterReadyToBuild ||
+		filterResurgence ||
+		filterIngredient !== null ||
+		filterHelminth !== null;
+
+	const clearAllFilters = () => {
+		setSearchQuery("");
+		setFilterPrime(null);
+		setFilterMastered(null);
+		setFilterOwned(null);
+		setFilterReadyToBuild(false);
+		setFilterResurgence(false);
+		setFilterIngredient(null);
+		setFilterHelminth(null);
+	};
 
 	const getFilterButtonClasses = (active: boolean) =>
 		`group transition-all duration-200 ${active ? "gap-2 px-3" : "gap-0 px-2 hover:gap-2 hover:px-3"}`;
@@ -582,11 +740,36 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	return (
 		<div className="flex flex-col h-full min-h-0">
 			<div
-				className={isCraftingTreeOpen ? "pointer-events-none" : undefined}
+				className={`flex flex-col min-h-0 flex-1 ${isCraftingTreeOpen ? "pointer-events-none" : ""}`}
 				aria-hidden={isCraftingTreeOpen}
 			>
 				<div className="sticky top-0 z-10 bg-background">
-					<div className="flex flex-wrap gap-2 mb-2">
+					<div className="flex flex-wrap items-center gap-2 mb-2">
+					<Button
+						variant={foundryFilter === "all" ? "default" : "outline"}
+						onClick={() => setAppFoundryFilter("all")}
+						className={getFilterButtonClasses(foundryFilter === "all")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${foundryFilter === "all" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/icon_mastery.svg")',
+								WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span
+							className={getFilterLabelClasses(foundryFilter === "all")}
+						>
+							All
+						</span>
+					</Button>
 					<Button
 						variant={foundryFilter === "warframes" ? "default" : "outline"}
 						onClick={() => setAppFoundryFilter("warframes")}
@@ -783,7 +966,78 @@ export function FoundryPage({ error }: FoundryPageProps) {
 							Pending
 						</span>
 					</Button>
+
+					<div className="flex-1" />
+
+					<Input
+						type="text"
+						placeholder="Search items..."
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						className="w-48 h-9"
+					/>
 				</div>
+
+					{foundryFilter !== "pending" && (
+						<div className="flex flex-wrap items-center gap-1.5 mb-2">
+							<TriStateFilterBadge
+								label="Prime"
+								value={filterPrime}
+								onChange={setFilterPrime}
+							/>
+							<TriStateFilterBadge
+								label="Mastered"
+								value={filterMastered}
+								onChange={setFilterMastered}
+							/>
+							<TriStateFilterBadge
+								label="Owned"
+								value={filterOwned}
+								onChange={setFilterOwned}
+							/>
+							<button
+								type="button"
+								className="cursor-pointer"
+								onClick={() => setFilterReadyToBuild((prev) => !prev)}
+							>
+								<Badge variant={filterReadyToBuild ? "default" : "outline"} className="text-xs cursor-pointer select-none">
+									Ready to Build
+								</Badge>
+							</button>
+							<button
+								type="button"
+								className="cursor-pointer"
+								onClick={() => setFilterResurgence((prev) => !prev)}
+							>
+								<Badge variant={filterResurgence ? "default" : "outline"} className="text-xs cursor-pointer select-none">
+									Prime Resurgence
+								</Badge>
+							</button>
+							<TriStateFilterBadge
+								label="Crafting Ingredient"
+								value={filterIngredient}
+								onChange={setFilterIngredient}
+							/>
+							{foundryFilter === "warframes" && (
+								<TriStateFilterBadge
+									label="Helminth"
+									value={filterHelminth}
+									onChange={setFilterHelminth}
+								/>
+							)}
+							{hasActiveFilters && (
+								<button
+									type="button"
+									className="cursor-pointer"
+									onClick={clearAllFilters}
+								>
+									<Badge variant="destructive" className="text-xs cursor-pointer select-none">
+										Clear All
+									</Badge>
+								</button>
+							)}
+						</div>
+					)}
 
 					{error && (
 						<Alert variant="destructive" className="mb-2">
@@ -795,9 +1049,19 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 				<ScrollArea className="flex-1 min-h-0">
 					<div className="space-y-2">
+					{foundryFilter === "all" && (
+						<CollectionSection
+							items={filterItems(allCollectionItems)}
+							loading={loading}
+							emptyLoadingText="Loading item data..."
+							emptyIdleText="Click Refresh Inventory in the sidebar to load item data"
+							onOpenCraftingTree={setCraftingTreeItem}
+						/>
+					)}
+
 					{foundryFilter === "warframes" && (
 						<CollectionSection
-							items={warframeItems}
+							items={filterItems(warframeItems)}
 							loading={loading}
 							emptyLoadingText="Loading warframe data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
@@ -807,7 +1071,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "archwings" && (
 						<CollectionSection
-							items={allArchwingItems}
+							items={filterItems(allArchwingItems)}
 							loading={loading}
 							emptyLoadingText="Loading archwing data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
@@ -817,7 +1081,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "primary" && (
 						<CollectionSection
-							items={primaryItems}
+							items={filterItems(primaryItems)}
 							loading={loading}
 							emptyLoadingText="Loading primary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
@@ -827,7 +1091,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "secondary" && (
 						<CollectionSection
-							items={secondaryItems}
+							items={filterItems(secondaryItems)}
 							loading={loading}
 							emptyLoadingText="Loading secondary weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
@@ -837,7 +1101,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "melee" && (
 						<CollectionSection
-							items={meleeItems}
+							items={filterItems(meleeItems)}
 							loading={loading}
 							emptyLoadingText="Loading melee weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
@@ -847,7 +1111,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "modular" && (
 						<CollectionSection
-							items={modularWeaponItems}
+							items={filterItems(modularWeaponItems)}
 							loading={loading}
 							emptyLoadingText="Loading modular weapon data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
@@ -857,7 +1121,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 					{foundryFilter === "companions" && (
 						<CollectionSection
-							items={companionItems}
+							items={filterItems(companionItems)}
 							loading={loading}
 							emptyLoadingText="Loading companion data..."
 							emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"

@@ -50,6 +50,7 @@ export interface AppState {
 	relicScannerHotkey: string;
 	relicScannerStatus: "stopped" | "watching" | "error";
 	relicScans: RelicScanEntry[];
+	primeResurgenceItemTypes: string[];
 }
 
 export const appStore = new Store<AppState>({
@@ -76,6 +77,7 @@ export const appStore = new Store<AppState>({
 	relicScannerHotkey: "F11",
 	relicScannerStatus: "stopped",
 	relicScans: [],
+	primeResurgenceItemTypes: [],
 });
 
 function updateStoreSlice<Key extends keyof AppState>(
@@ -186,4 +188,8 @@ export function setAppRelicScannerStatus(
 
 export function setAppRelicScans(value: Updater<RelicScanEntry[]>) {
 	updateStoreSlice("relicScans", value);
+}
+
+export function setAppPrimeResurgenceItemTypes(value: string[]) {
+	updateStoreSlice("primeResurgenceItemTypes", value);
 }

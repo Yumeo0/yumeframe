@@ -2,6 +2,10 @@ import { useStore } from "@tanstack/react-store";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import {
+	fetchAndParseWorldstate,
+	WarframePlatform,
+} from "@yumeo0/warframe-worldstate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FoundryPage } from "@/components/app/FoundryPage";
 import { MasteryHelperPage } from "@/components/app/MasteryHelperPage";
@@ -29,6 +33,7 @@ import {
 	setAppInventoryAutoRefreshEnabled,
 	setAppInventoryAutoRefreshIntervalSeconds,
 	setAppPendingRecipes,
+	setAppPrimeResurgenceItemTypes,
 	setAppRelicOverlayEnabled,
 	setAppRelicScannerEnabled,
 	setAppRelicScannerHotkey,
@@ -984,6 +989,21 @@ function AppMain() {
 		},
 		[persistEeLogPath],
 	);
+
+	useEffect(() => {
+		fetchAndParseWorldstate({
+			platform: WarframePlatform.PC,
+			fetchImpl: tauriFetch,
+		})
+			.then((parsed) => {
+				setAppPrimeResurgenceItemTypes(
+					parsed.vaultTrader.inventory.map((item) =>
+						item.uniqueName.replace("/StoreItems", ""),
+					),
+				);
+			})
+			.catch(() => {});
+	}, []);
 
 	useEffect(() => {
 		rewardPlatinumValuesRef.current = rewardPlatinumValues;
