@@ -621,12 +621,12 @@ pub fn set_relic_overlay_enabled(app: AppHandle, enabled: bool) -> Result<(), St
 
     if enabled {
         window
-            .set_ignore_cursor_events(true)
-            .map_err(|err| format!("Failed to set overlay click-through: {err}"))?;
-
-        window
             .show()
             .map_err(|err| format!("Failed to show overlay: {err}"))?;
+
+        window
+            .set_ignore_cursor_events(true)
+            .map_err(|err| format!("Failed to set overlay click-through: {err}"))?;
 
         return Ok(());
     }
