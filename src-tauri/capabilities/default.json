@@ -21,6 +21,7 @@
           "url": "https://api.warframe.com/*"
         }
       ]
-    }
+    },
+    "dialog:default"
   ]
 }

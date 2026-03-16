@@ -1,4 +1,4 @@
-import { Clipboard, Loader2, Search } from "lucide-react";
+import { Clipboard, FolderOpen, Loader2, Search } from "lucide-react";
 import type { SettingsSection } from "@/components/app/SettingsSidebar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,15 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import type { AssetEntry } from "@/types";
 
 interface SettingsPageProps {
@@ -25,8 +33,11 @@ interface SettingsPageProps {
 	assets: AssetEntry[];
 	inventory: string;
 	eeLogPath: string;
+	detectedEeLogPaths: string[];
+	eeLogPathPickerWarning: string;
 	onEeLogPathChange: (value: string) => void;
 	onDetectEeLogPath: () => Promise<string | null>;
+	onPickEeLogPath: () => Promise<void>;
 	eeLogDetectLoading: boolean;
 	relicScannerEnabled: boolean;
 	onRelicScannerEnabledChange: (value: boolean) => void;
@@ -34,10 +45,24 @@ interface SettingsPageProps {
 	onRelicOverlayEnabledChange: (value: boolean) => Promise<void>;
 	relicScannerHotkey: string;
 	onRelicScannerHotkeyChange: (value: string) => void;
+	relicScannerAutoDelayMode: "fixed" | "adaptive";
+	onRelicScannerAutoDelayModeChange: (value: "fixed" | "adaptive") => void;
+	relicScannerAutoFixedDelayMs: number;
+	onRelicScannerAutoFixedDelayMsChange: (value: number) => void;
+	relicScannerAutoAdaptiveIntervalMs: number;
+	onRelicScannerAutoAdaptiveIntervalMsChange: (value: number) => void;
+	relicScannerAutoAdaptiveTimeoutMs: number;
+	onRelicScannerAutoAdaptiveTimeoutMsChange: (value: number) => void;
+	relicScannerAutoDebounceMs: number;
+	onRelicScannerAutoDebounceMsChange: (value: number) => void;
 	onManualRelicScan: () => Promise<void>;
 	relicTestImagePath: string;
 	onRelicTestImagePathChange: (value: string) => void;
 	onRunRelicImageTest: () => Promise<void>;
+	relicTestLogSnippet: string;
+	onRelicTestLogSnippetChange: (value: string) => void;
+	relicTestForcedPlayerCount: string;
+	onRelicTestForcedPlayerCountChange: (value: string) => void;
 	relicImageTestLoading: boolean;
 	latestRewardGuessDebug: Array<{
 		candidate: string;
@@ -63,8 +88,11 @@ export function SettingsPage({
 	assets,
 	inventory,
 	eeLogPath,
+	detectedEeLogPaths,
+	eeLogPathPickerWarning,
 	onEeLogPathChange,
 	onDetectEeLogPath,
+	onPickEeLogPath,
 	eeLogDetectLoading,
 	relicScannerEnabled,
 	onRelicScannerEnabledChange,
@@ -72,10 +100,24 @@ export function SettingsPage({
 	onRelicOverlayEnabledChange,
 	relicScannerHotkey,
 	onRelicScannerHotkeyChange,
+	relicScannerAutoDelayMode,
+	onRelicScannerAutoDelayModeChange,
+	relicScannerAutoFixedDelayMs,
+	onRelicScannerAutoFixedDelayMsChange,
+	relicScannerAutoAdaptiveIntervalMs,
+	onRelicScannerAutoAdaptiveIntervalMsChange,
+	relicScannerAutoAdaptiveTimeoutMs,
+	onRelicScannerAutoAdaptiveTimeoutMsChange,
+	relicScannerAutoDebounceMs,
+	onRelicScannerAutoDebounceMsChange,
 	onManualRelicScan,
 	relicTestImagePath,
 	onRelicTestImagePathChange,
 	onRunRelicImageTest,
+	relicTestLogSnippet,
+	onRelicTestLogSnippetChange,
+	relicTestForcedPlayerCount,
+	onRelicTestForcedPlayerCountChange,
 	relicImageTestLoading,
 	latestRewardGuessDebug,
 }: SettingsPageProps) {
@@ -172,6 +214,112 @@ export function SettingsPage({
 								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
 							/>
 						</div>
+						<div className="grid gap-3 md:grid-cols-2">
+							<div className="flex flex-col gap-2">
+								<Label htmlFor="scanner-auto-delay-mode">Auto delay mode</Label>
+								<Select
+									value={relicScannerAutoDelayMode}
+									onValueChange={(value) =>
+										onRelicScannerAutoDelayModeChange(
+											value as "fixed" | "adaptive",
+										)
+									}
+								>
+									<SelectTrigger id="scanner-auto-delay-mode" className="w-full">
+										<SelectValue placeholder="Choose delay mode" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="fixed">Fixed delay</SelectItem>
+										<SelectItem value="adaptive">Adaptive loop</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							<div className="flex flex-col gap-2">
+								<label htmlFor="scanner-auto-debounce" className="text-sm font-medium">
+									Trigger debounce (ms)
+								</label>
+								<input
+									id="scanner-auto-debounce"
+									type="number"
+									min={100}
+									step={50}
+									value={relicScannerAutoDebounceMs}
+									onChange={(event) => {
+										const parsed = Number.parseInt(event.target.value, 10);
+										if (Number.isNaN(parsed)) {
+											return;
+										}
+										onRelicScannerAutoDebounceMsChange(parsed);
+									}}
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								/>
+							</div>
+						</div>
+						{relicScannerAutoDelayMode === "fixed" ? (
+							<div className="flex flex-col gap-2">
+								<label htmlFor="scanner-fixed-delay" className="text-sm font-medium">
+									Fixed auto delay (ms)
+								</label>
+								<input
+									id="scanner-fixed-delay"
+									type="number"
+									min={0}
+									step={50}
+									value={relicScannerAutoFixedDelayMs}
+									onChange={(event) => {
+										const parsed = Number.parseInt(event.target.value, 10);
+										if (Number.isNaN(parsed)) {
+											return;
+										}
+										onRelicScannerAutoFixedDelayMsChange(parsed);
+									}}
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								/>
+							</div>
+						) : (
+							<div className="grid gap-3 md:grid-cols-2">
+								<div className="flex flex-col gap-2">
+									<label htmlFor="scanner-adaptive-interval" className="text-sm font-medium">
+										Adaptive interval (ms)
+									</label>
+									<input
+										id="scanner-adaptive-interval"
+										type="number"
+										min={50}
+										step={50}
+										value={relicScannerAutoAdaptiveIntervalMs}
+										onChange={(event) => {
+											const parsed = Number.parseInt(event.target.value, 10);
+											if (Number.isNaN(parsed)) {
+												return;
+											}
+											onRelicScannerAutoAdaptiveIntervalMsChange(parsed);
+										}}
+										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+									/>
+								</div>
+								<div className="flex flex-col gap-2">
+									<label htmlFor="scanner-adaptive-timeout" className="text-sm font-medium">
+										Adaptive timeout (ms)
+									</label>
+									<input
+										id="scanner-adaptive-timeout"
+										type="number"
+										min={300}
+										step={100}
+										value={relicScannerAutoAdaptiveTimeoutMs}
+										onChange={(event) => {
+											const parsed = Number.parseInt(event.target.value, 10);
+											if (Number.isNaN(parsed)) {
+												return;
+											}
+											onRelicScannerAutoAdaptiveTimeoutMsChange(parsed);
+										}}
+										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+									/>
+								</div>
+							</div>
+						)}
 						<div className="flex flex-wrap items-center gap-2">
 							<Button
 								type="button"
@@ -245,14 +393,41 @@ export function SettingsPage({
 					<CardHeader>
 						<CardTitle>EE.log Path</CardTitle>
 						<CardDescription>
-							Detected on app start. You can override it manually.
+							Detected on app start. Select a detected path, browse for one,
+							or type manually.
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						<div className="flex flex-col gap-2">
-							<label htmlFor="ee-log-path" className="text-sm font-medium">
-								Path
-							</label>
+							<Label htmlFor="ee-log-detected-paths">
+								Detected files
+							</Label>
+							<Select
+								value={detectedEeLogPaths.includes(eeLogPath) ? eeLogPath : undefined}
+								onValueChange={onEeLogPathChange}
+							>
+								<SelectTrigger id="ee-log-detected-paths" className="w-full font-mono">
+									<SelectValue
+										placeholder={
+											detectedEeLogPaths.length > 0
+												? "Select detected EE.log path"
+												: "No detected EE.log files"
+										}
+									/>
+								</SelectTrigger>
+								<SelectContent>
+									{detectedEeLogPaths.map((path) => (
+										<SelectItem key={path} value={path} className="font-mono">
+											{path}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="flex flex-col gap-2">
+							<Label htmlFor="ee-log-path">
+								Manual path
+							</Label>
 							<input
 								id="ee-log-path"
 								type="text"
@@ -279,10 +454,21 @@ export function SettingsPage({
 								)}
 								Auto-detect
 							</Button>
-							<p className="text-xs break-all text-muted-foreground">
-								Windows default: %LOCALAPPDATA%\\Warframe\\EE.log
-							</p>
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onClick={() => {
+									void onPickEeLogPath();
+								}}
+							>
+								<FolderOpen className="w-4 h-4" />
+								Browse...
+							</Button>
 						</div>
+						{eeLogPathPickerWarning ? (
+							<p className="text-xs text-destructive">{eeLogPathPickerWarning}</p>
+						) : null}
 					</CardContent>
 				</Card>
 			)}
@@ -310,6 +496,25 @@ export function SettingsPage({
 									}
 									placeholder="Path to reward screenshot image"
 									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								/>
+								<input
+									type="number"
+									min={1}
+									max={4}
+									value={relicTestForcedPlayerCount}
+									onChange={(event) =>
+										onRelicTestForcedPlayerCountChange(event.target.value)
+									}
+									placeholder="Force player count hint (1-4)"
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								/>
+								<textarea
+									value={relicTestLogSnippet}
+									onChange={(event) =>
+										onRelicTestLogSnippetChange(event.target.value)
+									}
+									placeholder="Optional: paste EE.log snippet to simulate VoidProjections player detection"
+									className="w-full min-h-28 px-3 py-2 font-mono text-xs border rounded-md shadow-xs border-input bg-background text-foreground"
 								/>
 								<div className="flex items-center gap-2">
 									<Button

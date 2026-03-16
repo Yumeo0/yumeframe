@@ -2,6 +2,24 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef, useState } from "react";
 import type { RelicScanRewardValue, RelicScanTriggerSource } from "@/types";
 
+const BASE_CARD_WIDTH_AT_2560 = 312;
+const BASE_GAP_AT_2560 = 8;
+
+function calculateDimensions(width: number, height: number): { slotWidthPx: number; gapPx: number } {
+	if (width <= 0 || height <= 0) {
+		return { slotWidthPx: BASE_CARD_WIDTH_AT_2560, gapPx: BASE_GAP_AT_2560 };
+	}
+
+	// Warframe's scaling isn't perfectly linear. Use an interpolated formula
+	// that hits ~238px at 1920x1080 and 312px at 2560x1440.
+	const slotWidthPx = Math.round(width * 0.115625 + 16);
+	const widthScaling = width / 2560;
+	return {
+		slotWidthPx,
+		gapPx: Math.round(BASE_GAP_AT_2560 * widthScaling),
+	};
+}
+
 interface OverlaySetPiece {
 	rewardName: string;
 	displayName: string;
@@ -18,6 +36,7 @@ interface OverlayPayload {
 	source: RelicScanTriggerSource;
 	triggeredAt: number;
 	rewardCandidates: string[];
+	detectedSlotCount?: number;
 	rewards?: OverlayRewardValue[];
 	error?: string;
 }
@@ -25,6 +44,9 @@ interface OverlayPayload {
 export function RelicOverlayWindow() {
 	const [payload, setPayload] = useState<OverlayPayload | null>(null);
 	const [isVisible, setIsVisible] = useState(false);
+	const [{ slotWidthPx, gapPx }, setDimensions] = useState(() =>
+		calculateDimensions(window.innerWidth, window.innerHeight),
+	);
 	const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	useEffect(() => {
@@ -59,6 +81,19 @@ export function RelicOverlayWindow() {
 		};
 	}, []);
 
+	useEffect(() => {
+		const onResize = () => {
+			setDimensions(
+				calculateDimensions(window.innerWidth, window.innerHeight),
+			);
+		};
+
+		window.addEventListener("resize", onResize);
+		return () => {
+			window.removeEventListener("resize", onResize);
+		};
+	}, []);
+
 	if (!isVisible) {
 		return <div className="w-screen h-screen bg-transparent pointer-events-none" />;
 	}
@@ -66,13 +101,41 @@ export function RelicOverlayWindow() {
 	return (
 		<div className="relative w-screen h-screen bg-transparent pointer-events-none">
 			<div
-				className="absolute p-3 text-white -translate-x-1/2 border shadow-lg pointer-events-auto w-[min(95vw,82rem)] rounded-xl border-white/30 bg-background backdrop-blur-sm left-1/2"
-				style={{ top: `50%` }}
+				className="absolute text-white -translate-x-1/2 border shadow-lg pointer-events-auto rounded-xl border-white/30 bg-background backdrop-blur-sm left-1/2"
+				style={{
+					top: `50%`,
+					padding: `${gapPx}px`,
+					width: payload?.rewards?.length
+						? `${payload.rewards.length * slotWidthPx + (payload.rewards.length - 1) * gapPx + gapPx * 2}px`
+						: "fit-content",
+				}}
 			>
 				{payload?.error ? (
 					<p className="text-base text-red-300">{payload.error}</p>
 				) : payload?.rewards?.length ? (
-					<div className="grid grid-cols-4 gap-3">
+					<div
+						className={`grid w-fit mx-auto ${(() => {
+							const rawCount =
+								typeof payload.detectedSlotCount === "number"
+									? payload.detectedSlotCount
+									: Math.max(
+										...payload.rewards.map((reward) => reward.position ?? 0),
+										payload.rewards.length,
+									);
+							const slotCount = Math.min(4, Math.max(1, rawCount));
+							if (slotCount === 1) {
+								return "grid-cols-1";
+							}
+							if (slotCount === 2) {
+								return "grid-cols-2";
+							}
+							if (slotCount === 3) {
+								return "grid-cols-3";
+							}
+							return "grid-cols-4";
+						})()}`}
+						style={{ gap: `${gapPx}px` }}
+					>
 						{(() => {
 							const rewardNameCounts = new Map<string, number>();
 							for (const reward of payload.rewards) {
@@ -82,12 +145,17 @@ export function RelicOverlayWindow() {
 								);
 							}
 
-							const positionedRewards: Array<OverlayRewardValue | null> = [
-								null,
-								null,
-								null,
-								null,
-							];
+							const rawCount =
+								typeof payload.detectedSlotCount === "number"
+									? payload.detectedSlotCount
+									: Math.max(
+										...payload.rewards.map((reward) => reward.position ?? 0),
+										payload.rewards.length,
+									);
+							const slotCount = Math.min(4, Math.max(1, rawCount));
+
+							const positionedRewards: Array<OverlayRewardValue | null> =
+								Array.from({ length: slotCount }, () => null);
 							const unpositionedRewards: OverlayRewardValue[] = [];
 
 							for (const reward of payload.rewards) {
@@ -98,7 +166,7 @@ export function RelicOverlayWindow() {
 
 								if (
 									slotIndex >= 0 &&
-									slotIndex < 4 &&
+									slotIndex < slotCount &&
 									positionedRewards[slotIndex] === null
 								) {
 									positionedRewards[slotIndex] = reward;
@@ -107,7 +175,11 @@ export function RelicOverlayWindow() {
 								}
 							}
 
-							for (let index = 0; index < 4 && unpositionedRewards.length > 0; index += 1) {
+							for (
+								let index = 0;
+								index < slotCount && unpositionedRewards.length > 0;
+								index += 1
+							) {
 								if (positionedRewards[index] === null) {
 									const nextReward = unpositionedRewards.shift();
 									if (nextReward) {
@@ -121,7 +193,8 @@ export function RelicOverlayWindow() {
 									return (
 										<div
 											key={`${payload.triggeredAt}-empty-${slotIndex}`}
-											className="px-3 py-3 border rounded border-white/10 bg-white/5"
+											className="box-border px-3 py-3 border rounded border-white/10 bg-white/5"
+											style={{ width: `${slotWidthPx}px` }}
 										/>
 									);
 								}
@@ -136,7 +209,8 @@ export function RelicOverlayWindow() {
 							return (
 								<div
 									key={`${payload.triggeredAt}-${slotIndex}-${reward.rewardName}`}
-									className="px-3 py-3 text-center border rounded border-white/20 bg-white/10"
+									className="box-border px-3 py-3 text-center border rounded border-white/20 bg-white/10"
+									style={{ width: `${slotWidthPx}px` }}
 								>
 									<p className="text-lg font-semibold leading-tight">{rewardTitle}</p>
 									<div className="flex items-center justify-center gap-4 mt-2 text-lg text-white/90">
@@ -161,7 +235,7 @@ export function RelicOverlayWindow() {
 														>
 															<img
 																alt={piece.displayName}
-																className={`w-16 aspect-square rounded object-cover ${piece.ownedCount > 0 ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
+																className={`w-15 aspect-square rounded object-cover ${piece.ownedCount > 0 ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
 																src={piece.imageUrl}
 															/>
 															<span className="absolute -bottom-1 left-1/2 min-w-5 h-5 px-1 rounded bg-secondary text-secondary-foreground text-[16px] flex items-center justify-center -translate-x-1/2">

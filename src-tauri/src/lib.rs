@@ -1,5 +1,5 @@
-mod warframe_api;
 mod relic_scanner;
+mod warframe_api;
 use tauri::AppHandle;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -16,12 +16,13 @@ fn restart_app(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             greet,
             restart_app,
-            warframe_api::detect_ee_log_path,
+            warframe_api::detect_ee_log_paths,
             warframe_api::fetch_warframe_inventory,
             warframe_api::fetch_warframe_index,
             warframe_api::fetch_warframe_manifest,

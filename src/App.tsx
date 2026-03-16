@@ -1,6 +1,7 @@
 import { useStore } from "@tanstack/react-store";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, emitTo, listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import {
 	fetchAndParseWorldstate,
@@ -35,6 +36,11 @@ import {
 	setAppPendingRecipes,
 	setAppPrimeResurgenceItemTypes,
 	setAppRelicOverlayEnabled,
+	setAppRelicScannerAutoAdaptiveIntervalMs,
+	setAppRelicScannerAutoAdaptiveTimeoutMs,
+	setAppRelicScannerAutoDebounceMs,
+	setAppRelicScannerAutoDelayMode,
+	setAppRelicScannerAutoFixedDelayMs,
 	setAppRelicScannerEnabled,
 	setAppRelicScannerHotkey,
 	setAppRelicScannerStatus,
@@ -72,10 +78,45 @@ const RELIC_DAILY_MARKET_CACHE_KEY = "yumeframe.relic.daily.market.cache";
 const RELIC_SCANNER_SETTINGS_CACHE_KEY = "yumeframe.relic.scanner.settings";
 const EE_LOG_PATH_CACHE_KEY = "yumeframe.ee-log.path";
 const RELIC_IMAGE_TEST_PATH_CACHE_KEY = "yumeframe.relic.image-test.path";
+const RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY =
+	"yumeframe.relic.image-test.log-snippet";
+const RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY =
+	"yumeframe.relic.image-test.force-count";
 const DEFAULT_RELIC_SCANNER_HOTKEY = "F11";
 const LEGACY_RELIC_SCANNER_HOTKEY = "F12";
+const EE_LOG_FILE_NAME = "ee.log";
 const WFM_DAILY_MARKET_PRICES_URL =
 	"https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json";
+
+function getPathBaseName(path: string): string {
+	const segments = path.trim().replace(/[\\/]+$/, "").split(/[\\/]/);
+	return segments.length > 0 ? segments[segments.length - 1] : "";
+}
+
+function normalizeEeLogPath(path: string): string {
+	const trimmed = path.trim();
+	if (!trimmed) {
+		return "";
+	}
+
+	const withoutTrailingSeparators = trimmed.replace(/[\\/]+$/, "");
+	const lastSegment = getPathBaseName(withoutTrailingSeparators).toLowerCase();
+	if (lastSegment === EE_LOG_FILE_NAME) {
+		return withoutTrailingSeparators;
+	}
+
+	const looksLikeDirectoryInput = /[\\/]$/.test(trimmed) || lastSegment === "warframe";
+	if (!looksLikeDirectoryInput) {
+		return withoutTrailingSeparators;
+	}
+
+	const joiner =
+		withoutTrailingSeparators.includes("\\") &&
+		!withoutTrailingSeparators.includes("/")
+			? "\\"
+			: "/";
+	return `${withoutTrailingSeparators}${joiner}EE.log`;
+}
 
 interface MarketTopOrders {
 	buy?: Array<{ platinum: number }>;
@@ -108,7 +149,18 @@ interface ScannerEventPayload {
 	source: RelicScanTriggerSource;
 	triggeredAt: number;
 	rewardCandidates: string[];
+	slotResults?: Array<{
+		slotIndex: number;
+		displayIndex?: number;
+		rewardCandidate?: string;
+		rawText: string;
+		isValid: boolean;
+	}>;
+	detectedSlotCount?: number;
 	logMarkers: string[];
+	autoDelayMode?: "fixed" | "adaptive";
+	autoDelayMs?: number;
+	triggerDetail?: string;
 	error?: string;
 }
 
@@ -127,6 +179,7 @@ interface OverlayEventPayload {
 	source: RelicScanTriggerSource;
 	triggeredAt: number;
 	rewardCandidates: string[];
+	detectedSlotCount?: number;
 	rewards?: OverlayRewardValue[];
 	error?: string;
 }
@@ -428,6 +481,26 @@ function AppMain() {
 		appStore,
 		(state) => state.relicScannerHotkey,
 	);
+	const relicScannerAutoDelayMode = useStore(
+		appStore,
+		(state) => state.relicScannerAutoDelayMode,
+	);
+	const relicScannerAutoFixedDelayMs = useStore(
+		appStore,
+		(state) => state.relicScannerAutoFixedDelayMs,
+	);
+	const relicScannerAutoAdaptiveIntervalMs = useStore(
+		appStore,
+		(state) => state.relicScannerAutoAdaptiveIntervalMs,
+	);
+	const relicScannerAutoAdaptiveTimeoutMs = useStore(
+		appStore,
+		(state) => state.relicScannerAutoAdaptiveTimeoutMs,
+	);
+	const relicScannerAutoDebounceMs = useStore(
+		appStore,
+		(state) => state.relicScannerAutoDebounceMs,
+	);
 	const relicScannerStatus = useStore(
 		appStore,
 		(state) => state.relicScannerStatus,
@@ -451,7 +524,12 @@ function AppMain() {
 	const [dailyMarketPriceLookup, setDailyMarketPriceLookup] =
 		useState<DailyMarketPriceLookup | null>(null);
 	const [eeLogDetectLoading, setEeLogDetectLoading] = useState(false);
+	const [detectedEeLogPaths, setDetectedEeLogPaths] = useState<string[]>([]);
+	const [eeLogPathPickerWarning, setEeLogPathPickerWarning] = useState("");
 	const [relicImageTestPath, setRelicImageTestPath] = useState("");
+	const [relicImageTestLogSnippet, setRelicImageTestLogSnippet] = useState("");
+	const [relicImageTestForcedPlayerCount, setRelicImageTestForcedPlayerCount] =
+		useState("");
 	const [relicImageTestLoading, setRelicImageTestLoading] = useState(false);
 	const [scannerSettingsLoaded, setScannerSettingsLoaded] = useState(false);
 	const [activeSettingsSection, setActiveSettingsSection] =
@@ -786,10 +864,39 @@ function AppMain() {
 	);
 
 	const resolveScannerRewardValues = useCallback(
-		(rewardCandidates: string[]): RelicScanRewardValue[] => {
+		(
+			rewardCandidates: string[],
+			slotResults?: ScannerEventPayload["slotResults"],
+		): RelicScanRewardValue[] => {
 			const values: RelicScanRewardValue[] = [];
+			const candidatesWithPositions: Array<{
+				candidate: string;
+				displayIndex?: number;
+			}> = (() => {
+				if (slotResults && slotResults.length > 0) {
+					const fromSlots = slotResults.flatMap((slot) => {
+						const candidate =
+							typeof slot.rewardCandidate === "string"
+								? slot.rewardCandidate.trim()
+								: "";
+						if (!candidate) {
+							return [];
+						}
+						return [{ candidate, displayIndex: slot.displayIndex }];
+					});
+					if (fromSlots.length > 0) {
+						return fromSlots;
+					}
+				}
 
-			for (const [index, candidate] of rewardCandidates.entries()) {
+				return rewardCandidates.map((candidate, index) => ({
+					candidate,
+					displayIndex: index + 1,
+				}));
+			})();
+
+			for (const [index, entry] of candidatesWithPositions.entries()) {
+				const candidate = entry.candidate;
 				let normalizedRewardName = normalizeRewardGameRef(candidate);
 				let displayName =
 					scannerDisplayNameByRewardName[normalizedRewardName] || "";
@@ -872,8 +979,12 @@ function AppMain() {
 					rewardName: normalizedRewardName,
 					displayName: resolvedDisplayName,
 					position:
-						index >= 0 && index < 4
-							? ((index + 1) as 1 | 2 | 3 | 4)
+						typeof entry.displayIndex === "number" &&
+						entry.displayIndex >= 1 &&
+						entry.displayIndex <= 4
+							? (entry.displayIndex as 1 | 2 | 3 | 4)
+							: index >= 0 && index < 4
+								? ((index + 1) as 1 | 2 | 3 | 4)
 							: undefined,
 					platinum,
 					ducats,
@@ -922,9 +1033,20 @@ function AppMain() {
 	const appendScanEntry = useCallback(
 		(payload: ScannerEventPayload) => {
 			const rawCandidates = payload.rewardCandidates ?? [];
-			const rewards = resolveScannerRewardValues(rawCandidates);
+			const rewards = resolveScannerRewardValues(
+				rawCandidates,
+				payload.slotResults,
+			);
 			const overlayRewards = buildOverlayRewards(rewards);
 			setLatestRewardGuessDebug(buildRewardGuessDebug(rawCandidates));
+			console.debug("[relic-scanner] scan-event", {
+				source: payload.source,
+				triggerDetail: payload.triggerDetail,
+				autoDelayMode: payload.autoDelayMode,
+				autoDelayMs: payload.autoDelayMs,
+				detectedSlotCount: payload.detectedSlotCount,
+				mappedPositions: rewards.map((reward) => reward.position ?? null),
+			});
 			const status: RelicScanStatus = payload.error
 				? "error"
 				: rewards.length > 0
@@ -946,6 +1068,7 @@ function AppMain() {
 				source: entry.source,
 				triggeredAt: entry.triggeredAt,
 				rewardCandidates: entry.rawCandidates,
+				detectedSlotCount: payload.detectedSlotCount,
 				rewards: overlayRewards,
 				error: entry.error,
 			};
@@ -957,6 +1080,7 @@ function AppMain() {
 	);
 
 	const persistEeLogPath = useCallback((value: string) => {
+		setEeLogPathPickerWarning("");
 		setAppEeLogPath(value);
 		try {
 			if (value.trim()) {
@@ -973,7 +1097,9 @@ function AppMain() {
 		async (applyDetected = true) => {
 			setEeLogDetectLoading(true);
 			try {
-				const detectedPath = await invoke<string | null>("detect_ee_log_path");
+				const detectedPaths = await invoke<string[]>("detect_ee_log_paths");
+				setDetectedEeLogPaths(detectedPaths);
+				const detectedPath = detectedPaths[0] ?? null;
 				if (!detectedPath) {
 					return null;
 				}
@@ -990,6 +1116,32 @@ function AppMain() {
 		},
 		[persistEeLogPath],
 	);
+
+	const pickEeLogPathFromDialog = useCallback(async () => {
+		try {
+			const selected = await open({
+				multiple: false,
+				directory: false,
+				filters: [{ name: "EE.log", extensions: ["log"] }],
+			});
+
+			if (typeof selected !== "string") {
+				return;
+			}
+
+			const selectedBaseName = getPathBaseName(selected).toLowerCase();
+			if (selectedBaseName !== EE_LOG_FILE_NAME) {
+				setEeLogPathPickerWarning(
+					"Please select the exact EE.log file.",
+				);
+				return;
+			}
+
+			persistEeLogPath(selected);
+		} catch (err) {
+			console.error("Failed to pick EE.log path:", err);
+		}
+	}, [persistEeLogPath]);
 
 	useEffect(() => {
 		fetchAndParseWorldstate({
@@ -1026,6 +1178,11 @@ function AppMain() {
 					relicScannerEnabled?: boolean;
 					relicOverlayEnabled?: boolean;
 					relicScannerHotkey?: string;
+					relicScannerAutoDelayMode?: "fixed" | "adaptive";
+					relicScannerAutoFixedDelayMs?: number;
+					relicScannerAutoAdaptiveIntervalMs?: number;
+					relicScannerAutoAdaptiveTimeoutMs?: number;
+					relicScannerAutoDebounceMs?: number;
 					inventoryAutoRefreshEnabled?: boolean;
 					inventoryAutoRefreshIntervalSeconds?: number;
 				};
@@ -1046,6 +1203,32 @@ function AppMain() {
 							? DEFAULT_RELIC_SCANNER_HOTKEY
 							: parsedHotkey || DEFAULT_RELIC_SCANNER_HOTKEY;
 					setAppRelicScannerHotkey(migratedHotkey);
+				}
+				if (
+					parsed.relicScannerAutoDelayMode === "fixed" ||
+					parsed.relicScannerAutoDelayMode === "adaptive"
+				) {
+					setAppRelicScannerAutoDelayMode(parsed.relicScannerAutoDelayMode);
+				}
+				if (typeof parsed.relicScannerAutoFixedDelayMs === "number") {
+					setAppRelicScannerAutoFixedDelayMs(
+						Math.max(0, Math.floor(parsed.relicScannerAutoFixedDelayMs)),
+					);
+				}
+				if (typeof parsed.relicScannerAutoAdaptiveIntervalMs === "number") {
+					setAppRelicScannerAutoAdaptiveIntervalMs(
+						Math.max(50, Math.floor(parsed.relicScannerAutoAdaptiveIntervalMs)),
+					);
+				}
+				if (typeof parsed.relicScannerAutoAdaptiveTimeoutMs === "number") {
+					setAppRelicScannerAutoAdaptiveTimeoutMs(
+						Math.max(300, Math.floor(parsed.relicScannerAutoAdaptiveTimeoutMs)),
+					);
+				}
+				if (typeof parsed.relicScannerAutoDebounceMs === "number") {
+					setAppRelicScannerAutoDebounceMs(
+						Math.max(100, Math.floor(parsed.relicScannerAutoDebounceMs)),
+					);
 				}
 				if (typeof parsed.inventoryAutoRefreshEnabled === "boolean") {
 					setAppInventoryAutoRefreshEnabled(parsed.inventoryAutoRefreshEnabled);
@@ -1087,6 +1270,11 @@ function AppMain() {
 					relicScannerEnabled,
 					relicOverlayEnabled,
 					relicScannerHotkey: normalizedRelicScannerHotkey,
+					relicScannerAutoDelayMode,
+					relicScannerAutoFixedDelayMs,
+					relicScannerAutoAdaptiveIntervalMs,
+					relicScannerAutoAdaptiveTimeoutMs,
+					relicScannerAutoDebounceMs,
 					inventoryAutoRefreshEnabled,
 					inventoryAutoRefreshIntervalSeconds,
 				}),
@@ -1099,6 +1287,11 @@ function AppMain() {
 		relicOverlayEnabled,
 		relicScannerEnabled,
 		normalizedRelicScannerHotkey,
+		relicScannerAutoDelayMode,
+		relicScannerAutoFixedDelayMs,
+		relicScannerAutoAdaptiveIntervalMs,
+		relicScannerAutoAdaptiveTimeoutMs,
+		relicScannerAutoDebounceMs,
 		inventoryAutoRefreshEnabled,
 		inventoryAutoRefreshIntervalSeconds,
 		scannerSettingsLoaded,
@@ -1165,6 +1358,11 @@ function AppMain() {
 						relicScannerEnabled,
 						relicOverlayEnabled: nextEnabled,
 						relicScannerHotkey: normalizedRelicScannerHotkey,
+						relicScannerAutoDelayMode,
+						relicScannerAutoFixedDelayMs,
+						relicScannerAutoAdaptiveIntervalMs,
+						relicScannerAutoAdaptiveTimeoutMs,
+						relicScannerAutoDebounceMs,
 						inventoryAutoRefreshEnabled,
 						inventoryAutoRefreshIntervalSeconds,
 					}),
@@ -1189,6 +1387,11 @@ function AppMain() {
 		[
 			use24HourClock,
 			normalizedRelicScannerHotkey,
+			relicScannerAutoAdaptiveIntervalMs,
+			relicScannerAutoAdaptiveTimeoutMs,
+			relicScannerAutoDebounceMs,
+			relicScannerAutoDelayMode,
+			relicScannerAutoFixedDelayMs,
 			relicOverlayEnabled,
 			relicScannerEnabled,
 			inventoryAutoRefreshEnabled,
@@ -1240,15 +1443,32 @@ function AppMain() {
 
 		async function setupScanner() {
 			try {
-				if (!relicScannerEnabled || !eeLogPath.trim()) {
+				const normalizedEeLogPath = normalizeEeLogPath(eeLogPath);
+				if (!relicScannerEnabled || !normalizedEeLogPath) {
 					setAppRelicScannerStatus("stopped");
 					await invoke("stop_relic_scanner");
 					return;
 				}
 
 				await invoke("start_relic_scanner", {
-					eeLogPath,
+					eeLogPath: normalizedEeLogPath,
 					hotkey: normalizedRelicScannerHotkey,
+					scannerConfig: {
+						autoDelayMode: relicScannerAutoDelayMode,
+						autoFixedDelayMs: Math.max(
+							0,
+							Math.floor(relicScannerAutoFixedDelayMs),
+						),
+						autoAdaptiveIntervalMs: Math.max(
+							50,
+							Math.floor(relicScannerAutoAdaptiveIntervalMs),
+						),
+						autoAdaptiveTimeoutMs: Math.max(
+							300,
+							Math.floor(relicScannerAutoAdaptiveTimeoutMs),
+						),
+						autoDebounceMs: Math.max(100, Math.floor(relicScannerAutoDebounceMs)),
+					},
 				});
 				if (!isCancelled) {
 					setAppRelicScannerStatus("watching");
@@ -1267,7 +1487,16 @@ function AppMain() {
 			isCancelled = true;
 			void invoke("stop_relic_scanner");
 		};
-	}, [eeLogPath, normalizedRelicScannerHotkey, relicScannerEnabled]);
+	}, [
+		eeLogPath,
+		normalizedRelicScannerHotkey,
+		relicScannerEnabled,
+		relicScannerAutoDelayMode,
+		relicScannerAutoFixedDelayMs,
+		relicScannerAutoAdaptiveIntervalMs,
+		relicScannerAutoAdaptiveTimeoutMs,
+		relicScannerAutoDebounceMs,
+	]);
 
 	const runManualRelicScan = useCallback(async () => {
 		await invoke("trigger_relic_scan", { source: "manual" });
@@ -1277,6 +1506,15 @@ function AppMain() {
 		if (!relicImageTestPath.trim()) {
 			return;
 		}
+
+		const parsedForcedCount = Number.parseInt(
+			relicImageTestForcedPlayerCount,
+			10,
+		);
+		const forcedPlayerCountHint = Number.isNaN(parsedForcedCount)
+			? undefined
+			: Math.min(4, Math.max(1, parsedForcedCount));
+		const simulatedLogSnippet = relicImageTestLogSnippet.trim();
 
 		setRelicImageTestLoading(true);
 		try {
@@ -1289,17 +1527,36 @@ function AppMain() {
 			await invoke("trigger_relic_scan_from_image", {
 				imagePath: relicImageTestPath,
 				source: "image-test",
+				simulatedLogSnippet:
+					simulatedLogSnippet.length > 0 ? simulatedLogSnippet : undefined,
+				forcedPlayerCountHint,
 			});
 		} finally {
 			setRelicImageTestLoading(false);
 		}
-	}, [relicImageTestPath]);
+	}, [
+		relicImageTestPath,
+		relicImageTestLogSnippet,
+		relicImageTestForcedPlayerCount,
+	]);
 
 	useEffect(() => {
 		try {
 			const cachedPath = localStorage.getItem(RELIC_IMAGE_TEST_PATH_CACHE_KEY);
 			if (cachedPath) {
 				setRelicImageTestPath(cachedPath);
+			}
+			const cachedSnippet = localStorage.getItem(
+				RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY,
+			);
+			if (cachedSnippet) {
+				setRelicImageTestLogSnippet(cachedSnippet);
+			}
+			const cachedForcedCount = localStorage.getItem(
+				RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY,
+			);
+			if (cachedForcedCount) {
+				setRelicImageTestForcedPlayerCount(cachedForcedCount);
 			}
 		} catch (err) {
 			console.error("Failed to read relic image test path cache:", err);
@@ -1320,6 +1577,30 @@ function AppMain() {
 			console.error("Failed to persist relic image test path cache:", err);
 		}
 	}, [relicImageTestPath]);
+
+	useEffect(() => {
+		try {
+			if (relicImageTestLogSnippet.trim()) {
+				localStorage.setItem(
+					RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY,
+					relicImageTestLogSnippet,
+				);
+			} else {
+				localStorage.removeItem(RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY);
+			}
+
+			if (relicImageTestForcedPlayerCount.trim()) {
+				localStorage.setItem(
+					RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY,
+					relicImageTestForcedPlayerCount,
+				);
+			} else {
+				localStorage.removeItem(RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY);
+			}
+		} catch (err) {
+			console.error("Failed to persist relic image test hint cache:", err);
+		}
+	}, [relicImageTestLogSnippet, relicImageTestForcedPlayerCount]);
 
 	useEffect(() => {
 		try {
@@ -1811,6 +2092,7 @@ function AppMain() {
 
 							parts.push({
 								...ingredientNode,
+								owned: ingredientNode.owned ?? false,
 							});
 						}
 					}
@@ -2019,8 +2301,11 @@ function AppMain() {
 								assets={assets}
 								inventory={inventory}
 								eeLogPath={eeLogPath}
+								detectedEeLogPaths={detectedEeLogPaths}
+								eeLogPathPickerWarning={eeLogPathPickerWarning}
 								onEeLogPathChange={persistEeLogPath}
 								onDetectEeLogPath={detectEeLogPath}
+								onPickEeLogPath={pickEeLogPathFromDialog}
 								eeLogDetectLoading={eeLogDetectLoading}
 								relicScannerEnabled={relicScannerEnabled}
 								onRelicScannerEnabledChange={setAppRelicScannerEnabled}
@@ -2028,10 +2313,52 @@ function AppMain() {
 								onRelicOverlayEnabledChange={handleRelicOverlayEnabledChange}
 								relicScannerHotkey={relicScannerHotkey}
 								onRelicScannerHotkeyChange={setAppRelicScannerHotkey}
+								relicScannerAutoDelayMode={relicScannerAutoDelayMode}
+								onRelicScannerAutoDelayModeChange={
+									setAppRelicScannerAutoDelayMode
+								}
+								relicScannerAutoFixedDelayMs={
+									relicScannerAutoFixedDelayMs
+								}
+								onRelicScannerAutoFixedDelayMsChange={(value) => {
+									setAppRelicScannerAutoFixedDelayMs(
+										Math.max(0, Math.floor(value)),
+									);
+								}}
+								relicScannerAutoAdaptiveIntervalMs={
+									relicScannerAutoAdaptiveIntervalMs
+								}
+								onRelicScannerAutoAdaptiveIntervalMsChange={(value) => {
+									setAppRelicScannerAutoAdaptiveIntervalMs(
+										Math.max(50, Math.floor(value)),
+									);
+								}}
+								relicScannerAutoAdaptiveTimeoutMs={
+									relicScannerAutoAdaptiveTimeoutMs
+								}
+								onRelicScannerAutoAdaptiveTimeoutMsChange={(value) => {
+									setAppRelicScannerAutoAdaptiveTimeoutMs(
+										Math.max(300, Math.floor(value)),
+									);
+								}}
+								relicScannerAutoDebounceMs={relicScannerAutoDebounceMs}
+								onRelicScannerAutoDebounceMsChange={(value) => {
+									setAppRelicScannerAutoDebounceMs(
+										Math.max(100, Math.floor(value)),
+									);
+								}}
 								onManualRelicScan={runManualRelicScan}
 								relicTestImagePath={relicImageTestPath}
 								onRelicTestImagePathChange={setRelicImageTestPath}
 								onRunRelicImageTest={runRelicImageTest}
+								relicTestLogSnippet={relicImageTestLogSnippet}
+								onRelicTestLogSnippetChange={setRelicImageTestLogSnippet}
+								relicTestForcedPlayerCount={
+									relicImageTestForcedPlayerCount
+								}
+								onRelicTestForcedPlayerCountChange={
+									setRelicImageTestForcedPlayerCount
+								}
 								relicImageTestLoading={relicImageTestLoading}
 								latestRewardGuessDebug={latestRewardGuessDebug}
 							/>

@@ -29,12 +29,14 @@ function statusBadgeVariant(status: RelicScanEntry["status"]) {
 
 function sourceLabel(source: RelicScanEntry["source"]): string {
 	switch (source) {
-		case "log":
-			return "Auto (EE.log)";
+		case "auto-early":
+			return "Auto (Early)";
+		case "auto-late":
+			return "Auto (Late)";
 		case "hotkey":
 			return "Hotkey";
-			case "image-test":
-				return "Image Test";
+		case "image-test":
+			return "Image Test";
 		default:
 			return "Manual";
 	}

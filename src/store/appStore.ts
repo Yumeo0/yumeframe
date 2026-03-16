@@ -48,6 +48,11 @@ export interface AppState {
 	relicScannerEnabled: boolean;
 	relicOverlayEnabled: boolean;
 	relicScannerHotkey: string;
+	relicScannerAutoDelayMode: "fixed" | "adaptive";
+	relicScannerAutoFixedDelayMs: number;
+	relicScannerAutoAdaptiveIntervalMs: number;
+	relicScannerAutoAdaptiveTimeoutMs: number;
+	relicScannerAutoDebounceMs: number;
 	relicScannerStatus: "stopped" | "watching" | "error";
 	relicScans: RelicScanEntry[];
 	primeResurgenceItemTypes: string[];
@@ -75,6 +80,11 @@ export const appStore = new Store<AppState>({
 	relicScannerEnabled: true,
 	relicOverlayEnabled: false,
 	relicScannerHotkey: "F11",
+	relicScannerAutoDelayMode: "fixed",
+	relicScannerAutoFixedDelayMs: 1500,
+	relicScannerAutoAdaptiveIntervalMs: 250,
+	relicScannerAutoAdaptiveTimeoutMs: 2500,
+	relicScannerAutoDebounceMs: 1500,
 	relicScannerStatus: "stopped",
 	relicScans: [],
 	primeResurgenceItemTypes: [],
@@ -178,6 +188,32 @@ export function setAppRelicOverlayEnabled(value: Updater<boolean>) {
 
 export function setAppRelicScannerHotkey(value: Updater<string>) {
 	updateStoreSlice("relicScannerHotkey", value);
+}
+
+export function setAppRelicScannerAutoDelayMode(
+	value: Updater<"fixed" | "adaptive">,
+) {
+	updateStoreSlice("relicScannerAutoDelayMode", value);
+}
+
+export function setAppRelicScannerAutoFixedDelayMs(value: Updater<number>) {
+	updateStoreSlice("relicScannerAutoFixedDelayMs", value);
+}
+
+export function setAppRelicScannerAutoAdaptiveIntervalMs(
+	value: Updater<number>,
+) {
+	updateStoreSlice("relicScannerAutoAdaptiveIntervalMs", value);
+}
+
+export function setAppRelicScannerAutoAdaptiveTimeoutMs(
+	value: Updater<number>,
+) {
+	updateStoreSlice("relicScannerAutoAdaptiveTimeoutMs", value);
+}
+
+export function setAppRelicScannerAutoDebounceMs(value: Updater<number>) {
+	updateStoreSlice("relicScannerAutoDebounceMs", value);
 }
 
 export function setAppRelicScannerStatus(

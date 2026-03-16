@@ -30,7 +30,8 @@
         "fullscreen": true,
         "visible": false,
         "focus": false,
-        "shadow": false
+        "shadow": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

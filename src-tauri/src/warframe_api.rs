@@ -1,6 +1,6 @@
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fs;
 use std::io::{BufReader, BufRead};
 use std::path::{Path, PathBuf};
@@ -20,11 +20,13 @@ fn existing_file_path(path: PathBuf) -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-fn detect_ee_log_path_internal() -> Option<String> {
+fn detect_ee_log_paths_internal() -> Vec<String> {
+    let mut paths = BTreeSet::new();
+
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
         let candidate = PathBuf::from(local_app_data).join("Warframe").join("EE.log");
         if let Some(path) = existing_file_path(candidate) {
-            return Some(path);
+            paths.insert(path);
         }
     }
 
@@ -35,16 +37,21 @@ fn detect_ee_log_path_internal() -> Option<String> {
             .join("Warframe")
             .join("EE.log");
         if let Some(path) = existing_file_path(candidate) {
-            return Some(path);
+            paths.insert(path);
         }
     }
 
-    None
+    paths.into_iter().collect()
 }
 
 #[cfg(target_os = "linux")]
-fn scan_users_dir_for_ee_log(users_dir: &Path) -> Option<String> {
-    let entries = fs::read_dir(users_dir).ok()?;
+fn scan_users_dir_for_ee_log(users_dir: &Path) -> Vec<String> {
+    let entries = match fs::read_dir(users_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut matches = BTreeSet::new();
 
     for entry in entries.flatten() {
         let candidate = entry
@@ -54,16 +61,21 @@ fn scan_users_dir_for_ee_log(users_dir: &Path) -> Option<String> {
             .join("Warframe")
             .join("EE.log");
         if let Some(path) = existing_file_path(candidate) {
-            return Some(path);
+            matches.insert(path);
         }
     }
 
-    None
+    matches.into_iter().collect()
 }
 
 #[cfg(target_os = "linux")]
-fn scan_compatdata_root_for_ee_log(root: &Path) -> Option<String> {
-    let entries = fs::read_dir(root).ok()?;
+fn scan_compatdata_root_for_ee_log(root: &Path) -> Vec<String> {
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut matches = BTreeSet::new();
 
     for entry in entries.flatten() {
         let pfx = entry.path().join("pfx").join("drive_c");
@@ -76,25 +88,23 @@ fn scan_compatdata_root_for_ee_log(root: &Path) -> Option<String> {
             .join("Warframe")
             .join("EE.log");
         if let Some(path) = existing_file_path(steamuser_candidate) {
-            return Some(path);
+            matches.insert(path);
         }
 
         let users_dir = pfx.join("users");
-        if let Some(path) = scan_users_dir_for_ee_log(&users_dir) {
-            return Some(path);
-        }
+        matches.extend(scan_users_dir_for_ee_log(&users_dir));
     }
 
-    None
+    matches.into_iter().collect()
 }
 
 #[cfg(target_os = "linux")]
-fn detect_ee_log_path_internal() -> Option<String> {
+fn detect_ee_log_paths_internal() -> Vec<String> {
+    let mut paths = BTreeSet::new();
+
     if let Ok(wine_prefix) = std::env::var("WINEPREFIX") {
         let prefix_root = PathBuf::from(wine_prefix).join("drive_c").join("users");
-        if let Some(path) = scan_users_dir_for_ee_log(&prefix_root) {
-            return Some(path);
-        }
+        paths.extend(scan_users_dir_for_ee_log(&prefix_root));
     }
 
     if let Ok(home) = std::env::var("HOME") {
@@ -123,9 +133,7 @@ fn detect_ee_log_path_internal() -> Option<String> {
         ];
 
         for root in compatdata_roots {
-            if let Some(path) = scan_compatdata_root_for_ee_log(&root) {
-                return Some(path);
-            }
+            paths.extend(scan_compatdata_root_for_ee_log(&root));
         }
 
         let home_windows_like_candidates = [
@@ -137,9 +145,7 @@ fn detect_ee_log_path_internal() -> Option<String> {
         ];
 
         for candidate in home_windows_like_candidates {
-            if let Some(path) = scan_users_dir_for_ee_log(&candidate) {
-                return Some(path);
-            }
+            paths.extend(scan_users_dir_for_ee_log(&candidate));
         }
     }
 
@@ -155,24 +161,44 @@ fn detect_ee_log_path_internal() -> Option<String> {
 
             let users_dir_candidates = [mount_path.join("Users"), mount_path.join("users")];
             for users_dir in users_dir_candidates {
-                if let Some(path) = scan_users_dir_for_ee_log(&users_dir) {
-                    return Some(path);
-                }
+                paths.extend(scan_users_dir_for_ee_log(&users_dir));
+            }
+
+            let mounted_steam_compatdata_roots = [
+                mount_path
+                    .join("Program Files (x86)")
+                    .join("Steam")
+                    .join("steamapps")
+                    .join("compatdata"),
+                mount_path
+                    .join("Program Files")
+                    .join("Steam")
+                    .join("steamapps")
+                    .join("compatdata"),
+                mount_path
+                    .join("SteamLibrary")
+                    .join("steamapps")
+                    .join("compatdata"),
+                mount_path.join("steamapps").join("compatdata"),
+            ];
+
+            for root in mounted_steam_compatdata_roots {
+                paths.extend(scan_compatdata_root_for_ee_log(&root));
             }
         }
     }
 
-    None
+    paths.into_iter().collect()
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-fn detect_ee_log_path_internal() -> Option<String> {
-    None
+fn detect_ee_log_paths_internal() -> Vec<String> {
+    Vec::new()
 }
 
 #[tauri::command]
-pub fn detect_ee_log_path() -> Option<String> {
-    detect_ee_log_path_internal()
+pub fn detect_ee_log_paths() -> Vec<String> {
+    detect_ee_log_paths_internal()
 }
 
 /// Get the cache directory for the app

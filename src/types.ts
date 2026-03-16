@@ -616,7 +616,12 @@ export interface OwnedRelic {
 	relicRewards: OwnedRelicReward[];
 }
 
-export type RelicScanTriggerSource = "log" | "hotkey" | "manual" | "image-test";
+export type RelicScanTriggerSource =
+	| "auto-early"
+	| "auto-late"
+	| "hotkey"
+	| "manual"
+	| "image-test";
 
 export type RelicScanStatus =
 	| "triggered"
