@@ -224,12 +224,12 @@ function CollectionSection({
 															<div
 																key={`${item.key}-${part.name}-${index}`}
 																className="relative flex justify-center group"
-																title={`${part.name}${part.count ? ` x${part.count}` : ""}${part.owned === undefined ? "" : `: ${part.hasRecipe ? "Recipe owned" : part.owned ? "Owned" : "Missing"}`}`}
+																title={`${part.name}${part.count ? ` x${part.count}` : ""}${part.owned === undefined ? "" : `: ${part.owned ? "Owned" : part.hasRecipe ? "Recipe owned" : "Missing"}`}`}
 															>
 																<img
 																	src={part.imageUrl}
 																	alt={part.name}
-																	className={`w-12 aspect-square rounded object-cover ${part.owned === undefined ? "border" : part.isCraftingRecipe ? "border-2 border-amber-500/70 bg-amber-500/10" : part.hasRecipe ? "border-2 border-primary/60" : part.owned ? "border-2 border-green-500/50" : "border-2 border-muted opacity-50"}`}
+																	className={`w-12 aspect-square rounded object-cover ${part.owned === undefined ? "border" : part.owned ? "border-2 border-green-500/50" : part.isCraftingRecipe ? "border-2 border-amber-500/70 bg-amber-500/10" : part.hasRecipe ? "border-2 border-primary/60" : "border-2 border-muted opacity-50"}`}
 																/>
 																{part.count ? (
 																	<span className="absolute -bottom-1 left-1/2 min-w-5 h-5 px-1 rounded bg-secondary text-secondary-foreground text-[10px] flex items-center justify-center">

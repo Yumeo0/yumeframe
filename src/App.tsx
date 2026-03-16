@@ -1830,6 +1830,8 @@ function AppMain() {
 	const applyInventoryData = useCallback(
 		(result: string) => {
 			const inventoryData = JSON.parse(result);
+			const normalizeStoreItemPath = (value: string): string =>
+				value.trim().replace("/StoreItems", "");
 			const suits: WarframeSuit[] = inventoryData.Suits || [];
 			const spaceSuits: WarframeSuit[] = inventoryData.SpaceSuits || [];
 			interface ConsumedSuitEntry {
@@ -1914,13 +1916,25 @@ function AppMain() {
 				ItemCount: number;
 			}
 			const playerRecipes: RecipeItem[] = inventoryData.Recipes || [];
-			const ownedBlueprints = new Set(playerRecipes.map((r) => r.ItemType));
+			const ownedBlueprints = new Set(
+				playerRecipes.map((r) => normalizeStoreItemPath(r.ItemType)),
+			);
+			const ownedRecipeCounts = new Map<string, number>();
+			for (const recipeItem of playerRecipes) {
+				const normalizedType = normalizeStoreItemPath(recipeItem.ItemType);
+				const currentCount = ownedRecipeCounts.get(normalizedType) ?? 0;
+				ownedRecipeCounts.set(
+					normalizedType,
+					currentCount + Math.max(0, recipeItem.ItemCount ?? 0),
+				);
+			}
 			const miscItems: InventoryMiscItem[] = inventoryData.MiscItems || [];
 			const ownedMiscCounts = new Map<string, number>();
 			for (const miscItem of miscItems) {
-				const currentCount = ownedMiscCounts.get(miscItem.ItemType) ?? 0;
+				const normalizedType = normalizeStoreItemPath(miscItem.ItemType);
+				const currentCount = ownedMiscCounts.get(normalizedType) ?? 0;
 				ownedMiscCounts.set(
-					miscItem.ItemType,
+					normalizedType,
 					currentCount + miscItem.ItemCount,
 				);
 			}
@@ -1993,31 +2007,36 @@ function AppMain() {
 				depth = 0,
 				path: Set<string> = new Set(),
 			): WeaponCraftRequirement => {
+				const normalizedItemType = normalizeStoreItemPath(itemType);
 				const partName =
-					weaponNames[itemType] ||
-					warframeNames[itemType] ||
-					companionNames[itemType] ||
-					resourceNames[itemType] ||
-					itemType.split("/").pop() ||
+					weaponNames[normalizedItemType] ||
+					warframeNames[normalizedItemType] ||
+					companionNames[normalizedItemType] ||
+					resourceNames[normalizedItemType] ||
+					normalizedItemType.split("/").pop() ||
 					"Part";
-				const partTexture = manifestMap.get(itemType) || "";
+				const partTexture =
+					manifestMap.get(normalizedItemType) || manifestMap.get(itemType) || "";
 				const partIcon = partTexture
 					? `http://content.warframe.com/PublicExport${partTexture}`
 					: "";
-				const blueprintType = getBlueprintTypeForIngredient(itemType);
+				const blueprintType = getBlueprintTypeForIngredient(normalizedItemType);
+				const recipeForItem = recipeData[normalizedItemType] ?? recipeData[itemType];
 				const hasRecipe =
-					ownedBlueprints.has(blueprintType) || ownedBlueprints.has(itemType);
+					ownedBlueprints.has(blueprintType) ||
+					(Boolean(recipeForItem) && ownedBlueprints.has(normalizedItemType));
 				const isCraftingRecipe =
 					pendingRecipeTypes.has(blueprintType) ||
-					pendingRecipeTypes.has(itemType);
-				const ownedMaterialCount = ownedMiscCounts.get(itemType) ?? 0;
+					pendingRecipeTypes.has(normalizedItemType);
+				const ownedMaterialCount =
+					(ownedMiscCounts.get(normalizedItemType) ?? 0) +
+					((recipeForItem ? 0 : ownedRecipeCounts.get(normalizedItemType) ?? 0));
 				const hasEnoughMaterials = ownedMaterialCount >= itemCount;
-				const recipeForItem = recipeData[itemType];
 
 				let requirements: WeaponCraftRequirement[] | undefined;
-				if (recipeForItem && depth < 6 && path.has(itemType) === false) {
+				if (recipeForItem && depth < 6 && path.has(normalizedItemType) === false) {
 					const nextPath = new Set(path);
-					nextPath.add(itemType);
+					nextPath.add(normalizedItemType);
 					requirements = recipeForItem.ingredients.map((ingredient) =>
 						buildRequirementTree(
 							ingredient.ItemType,
@@ -2030,7 +2049,7 @@ function AppMain() {
 
 				return {
 					name: partName,
-					itemType,
+					itemType: normalizedItemType,
 					count: itemCount,
 					owned: hasEnoughMaterials,
 					hasRecipe,
@@ -2072,7 +2091,7 @@ function AppMain() {
 						{
 							name: "Blueprint",
 							itemType: mainRecipe?.uniqueName,
-							owned: hasMainBlueprint,
+							owned: false,
 							hasRecipe: hasMainBlueprint,
 							isCraftingRecipe: mainRecipe
 								? pendingRecipeTypes.has(mainRecipe.uniqueName)
