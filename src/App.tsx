@@ -2143,15 +2143,37 @@ function AppMain() {
 						: "";
 
 					const weaponRecipe = recipeData[uniqueName];
-					const requirements =
-						weaponRecipe?.ingredients.map((ingredient) =>
-							buildRequirementTree(
-								ingredient.ItemType,
-								ingredient.ItemCount,
-								0,
-								new Set([uniqueName]),
-							),
-						) || [];
+					const hasMainBlueprint = weaponRecipe
+						? ownedBlueprints.has(weaponRecipe.uniqueName)
+						: false;
+					const mainBlueprintTexture = weaponRecipe
+						? manifestMap.get(weaponRecipe.uniqueName) || ""
+						: "";
+					const mainBlueprintIcon = mainBlueprintTexture
+						? `http://content.warframe.com/PublicExport${mainBlueprintTexture}`
+						: "";
+
+					const requirements = weaponRecipe
+						? [
+								{
+									name: "Blueprint",
+									itemType: weaponRecipe.uniqueName,
+									count: 1,
+									owned: false,
+									hasRecipe: hasMainBlueprint,
+									isCraftingRecipe: pendingRecipeTypes.has(weaponRecipe.uniqueName),
+									imageUrl: mainBlueprintIcon,
+								},
+								...weaponRecipe.ingredients.map((ingredient) =>
+									buildRequirementTree(
+										ingredient.ItemType,
+										ingredient.ItemCount,
+										0,
+										new Set([uniqueName]),
+									),
+								),
+							]
+						: [];
 
 					return {
 						...weaponInfo,
