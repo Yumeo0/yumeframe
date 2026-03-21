@@ -5,6 +5,7 @@ import type {
 	CollectionItem,
 	CollectionPart,
 } from "@/components/app/foundry.types";
+import { IngredientUsageModal } from "@/components/app/IngredientUsageModal";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ interface CollectionSectionProps {
 	emptyLoadingText: string;
 	emptyIdleText: string;
 	onOpenCraftingTree: (item: CollectionItem) => void;
+	onOpenIngredientUsage: (item: CollectionItem) => void;
 	isIngredientItem: (item: CollectionItem) => boolean;
 }
 
@@ -86,6 +88,7 @@ function CollectionSection({
 	emptyLoadingText,
 	emptyIdleText,
 	onOpenCraftingTree,
+	onOpenIngredientUsage,
 	isIngredientItem,
 }: CollectionSectionProps) {
 	return (
@@ -126,7 +129,11 @@ function CollectionSection({
 											<div className="inline-flex items-center gap-1.5 mb-2 text-sm text-muted-foreground">
 												{item.isSubsumed !== undefined && !isPrime ? (
 													<span
-														title={item.isSubsumed ? "Already subsumed" : "Not subsumed yet"}
+														title={
+															item.isSubsumed
+																? "Already subsumed"
+																: "Not subsumed yet"
+														}
 														className="inline-flex"
 													>
 														<span
@@ -139,8 +146,10 @@ function CollectionSection({
 															<span
 																className={`relative inline-block h-6 w-6 ${item.isSubsumed ? "bg-primary" : "bg-muted"}`}
 																style={{
-																	maskImage: 'url("/icons/helminth/icon_empower.svg")',
-																	WebkitMaskImage: 'url("/icons/helminth/icon_empower.svg")',
+																	maskImage:
+																		'url("/icons/helminth/icon_empower.svg")',
+																	WebkitMaskImage:
+																		'url("/icons/helminth/icon_empower.svg")',
 																	maskRepeat: "no-repeat",
 																	WebkitMaskRepeat: "no-repeat",
 																	maskPosition: "center",
@@ -153,9 +162,11 @@ function CollectionSection({
 													</span>
 												) : null}
 												{ingredient ? (
-													<span
+													<button
+														type="button"
 														title="Used as crafting ingredient"
-														className="inline-flex"
+														onClick={() => onOpenIngredientUsage(item)}
+														className="inline-flex transition-transform hover:scale-110"
 													>
 														<span
 															aria-hidden="true"
@@ -166,7 +177,8 @@ function CollectionSection({
 																className="relative inline-block w-6 h-6 bg-primary"
 																style={{
 																	maskImage: 'url("/icons/icon_foundry.svg")',
-																	WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
+																	WebkitMaskImage:
+																		'url("/icons/icon_foundry.svg")',
 																	maskRepeat: "no-repeat",
 																	WebkitMaskRepeat: "no-repeat",
 																	maskPosition: "center",
@@ -176,7 +188,7 @@ function CollectionSection({
 																}}
 															/>
 														</span>
-													</span>
+													</button>
 												) : null}
 												<span
 													title={`${mastered ? "Mastered" : "Not mastered"} (${item.xp}/${requiredAffinity} Affinity, max level ${item.maxLevel})`}
@@ -193,7 +205,8 @@ function CollectionSection({
 															className={`relative inline-block h-6 w-6 ${mastered ? "bg-primary" : "bg-muted"}`}
 															style={{
 																maskImage: 'url("/icons/icon_mastery.svg")',
-																WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
+																WebkitMaskImage:
+																	'url("/icons/icon_mastery.svg")',
 																maskRepeat: "no-repeat",
 																WebkitMaskRepeat: "no-repeat",
 																maskPosition: "center",
@@ -320,7 +333,7 @@ function PendingRecipesSection({
 												totalBuildTimeMs) *
 												100,
 										),
-								  );
+									);
 
 						return (
 							<Card
@@ -345,7 +358,11 @@ function PendingRecipesSection({
 												{formatRemainingTime(remaining)}
 											</p>
 											<p className="text-xs text-muted-foreground">
-												Done: {formatDateTime(recipe.completionTimestamp, use24HourClock)}
+												Done:{" "}
+												{formatDateTime(
+													recipe.completionTimestamp,
+													use24HourClock,
+												)}
 											</p>
 											<Progress value={progressValue} className="h-2 mt-2" />
 										</div>
@@ -376,18 +393,24 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	const pendingRecipes = useStore(appStore, (state) => state.pendingRecipes);
 	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
-	const primeResurgenceItemTypes = useStore(appStore, (state) => state.primeResurgenceItemTypes);
-	const [now, setNow] = useState(() => Date.now());
-	const [craftingTreeItem, setCraftingTreeItem] = useState<CollectionItem | null>(
-		null,
+	const primeResurgenceItemTypes = useStore(
+		appStore,
+		(state) => state.primeResurgenceItemTypes,
 	);
+	const [now, setNow] = useState(() => Date.now());
+	const [craftingTreeItem, setCraftingTreeItem] =
+		useState<CollectionItem | null>(null);
+	const [ingredientUsageItem, setIngredientUsageItem] =
+		useState<CollectionItem | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filterPrime, setFilterPrime] = useState<boolean | null>(null);
 	const [filterMastered, setFilterMastered] = useState<boolean | null>(null);
 	const [filterOwned, setFilterOwned] = useState<boolean | null>(null);
 	const [filterReadyToBuild, setFilterReadyToBuild] = useState(false);
 	const [filterResurgence, setFilterResurgence] = useState(false);
-	const [filterIngredient, setFilterIngredient] = useState<boolean | null>(null);
+	const [filterIngredient, setFilterIngredient] = useState<boolean | null>(
+		null,
+	);
 	const [filterHelminth, setFilterHelminth] = useState<boolean | null>(null);
 
 	useEffect(() => {
@@ -429,7 +452,9 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			weapon.uniqueName.includes("Modular") === false,
 	);
 
-	const mapRequirementToPart = (requirement: CollectionPart): CollectionPart => ({
+	const mapRequirementToPart = (
+		requirement: CollectionPart,
+	): CollectionPart => ({
 		name: requirement.name,
 		itemType: requirement.itemType,
 		count: requirement.count,
@@ -601,14 +626,16 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		}),
 	);
 
-	const pendingRecipeItems: PendingRecipeItem[] = pendingRecipes.map((recipe) => ({
-		itemType: recipe.itemType,
-		resultType: recipe.resultType,
-		name: recipe.name,
-		imageUrl: recipe.imageUrl,
-		completionTimestamp: recipe.completionTimestamp,
-		buildTime: recipe.buildTime,
-	}));
+	const pendingRecipeItems: PendingRecipeItem[] = pendingRecipes.map(
+		(recipe) => ({
+			itemType: recipe.itemType,
+			resultType: recipe.resultType,
+			name: recipe.name,
+			imageUrl: recipe.imageUrl,
+			completionTimestamp: recipe.completionTimestamp,
+			buildTime: recipe.buildTime,
+		}),
+	);
 
 	const companionItems = [
 		...companionCompanionItems,
@@ -653,6 +680,43 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			collectParts(item.parts);
 		}
 		return keys;
+	}, [allCollectionItems]);
+
+	const ingredientUsageMap = useMemo(() => {
+		const byIngredientType = new Map<string, Set<CollectionItem>>();
+
+		const collectUsages = (
+			parts: CollectionPart[],
+			parentItem: CollectionItem,
+		) => {
+			for (const part of parts) {
+				if (part.itemType) {
+					const existing = byIngredientType.get(part.itemType);
+					if (existing) {
+						existing.add(parentItem);
+					} else {
+						byIngredientType.set(part.itemType, new Set([parentItem]));
+					}
+				}
+				if (part.requirements && part.requirements.length > 0) {
+					collectUsages(part.requirements, parentItem);
+				}
+			}
+		};
+
+		for (const item of allCollectionItems) {
+			collectUsages(item.parts, item);
+		}
+
+		const sortedMap = new Map<string, CollectionItem[]>();
+		for (const [ingredientType, itemSet] of byIngredientType) {
+			sortedMap.set(
+				ingredientType,
+				[...itemSet].sort((a, b) => a.displayName.localeCompare(b.displayName)),
+			);
+		}
+
+		return sortedMap;
 	}, [allCollectionItems]);
 
 	const primeResurgenceItemTypeSet = useMemo(
@@ -766,6 +830,18 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		`whitespace-nowrap overflow-hidden transition-all duration-200 ${active ? "max-w-24 opacity-100" : "max-w-0 opacity-0 group-hover:max-w-24 group-hover:opacity-100"}`;
 
 	const isCraftingTreeOpen = craftingTreeItem !== null;
+	const isIngredientUsageOpen = ingredientUsageItem !== null;
+	const isAnyModalOpen = isCraftingTreeOpen || isIngredientUsageOpen;
+	const ingredientUsageItems = ingredientUsageItem
+		? (ingredientUsageMap.get(ingredientUsageItem.key) ?? [])
+		: [];
+	const openCraftingTreeFromIngredientUsage = useCallback(
+		(item: CollectionItem) => {
+			setIngredientUsageItem(null);
+			setCraftingTreeItem(item);
+		},
+		[],
+	);
 	const isIngredientItem = useCallback(
 		(item: CollectionItem) => ingredientItemKeys.has(item.key),
 		[ingredientItemKeys],
@@ -774,243 +850,247 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	return (
 		<div className="flex flex-col h-full min-h-0">
 			<div
-				className={`flex flex-col min-h-0 flex-1 ${isCraftingTreeOpen ? "pointer-events-none" : ""}`}
-				aria-hidden={isCraftingTreeOpen}
+				className={`flex flex-col min-h-0 flex-1 ${isAnyModalOpen ? "pointer-events-none" : ""}`}
+				aria-hidden={isAnyModalOpen}
 			>
 				<div className="sticky top-0 z-10 bg-background">
 					<div className="flex flex-wrap items-center gap-2 mb-2">
-					<Button
-						variant={foundryFilter === "all" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("all")}
-						className={getFilterButtonClasses(foundryFilter === "all")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "all" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_mastery.svg")',
-								WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "all")}
+						<Button
+							variant={foundryFilter === "all" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("all")}
+							className={getFilterButtonClasses(foundryFilter === "all")}
 						>
-							All
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "warframes" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("warframes")}
-						className={getFilterButtonClasses(foundryFilter === "warframes")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "warframes" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_warframe.svg")',
-								WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "warframes")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "all" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_mastery.svg")',
+									WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span className={getFilterLabelClasses(foundryFilter === "all")}>
+								All
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "warframes" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("warframes")}
+							className={getFilterButtonClasses(foundryFilter === "warframes")}
 						>
-							Warframes
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "archwings" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("archwings")}
-						className={getFilterButtonClasses(foundryFilter === "archwings")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "archwings" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_archwing.svg")',
-								WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "archwings")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "warframes" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_warframe.svg")',
+									WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "warframes")}
+							>
+								Warframes
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "archwings" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("archwings")}
+							className={getFilterButtonClasses(foundryFilter === "archwings")}
 						>
-							Archwings
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "primary" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("primary")}
-						className={getFilterButtonClasses(foundryFilter === "primary")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "primary" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_rifle.svg")',
-								WebkitMaskImage: 'url("/icons/icon_rifle.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "primary")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "archwings" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_archwing.svg")',
+									WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "archwings")}
+							>
+								Archwings
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "primary" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("primary")}
+							className={getFilterButtonClasses(foundryFilter === "primary")}
 						>
-							Primary
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "secondary" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("secondary")}
-						className={getFilterButtonClasses(foundryFilter === "secondary")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "secondary" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_pistol.svg")',
-								WebkitMaskImage: 'url("/icons/icon_pistol.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "secondary")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "primary" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_rifle.svg")',
+									WebkitMaskImage: 'url("/icons/icon_rifle.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "primary")}
+							>
+								Primary
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "secondary" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("secondary")}
+							className={getFilterButtonClasses(foundryFilter === "secondary")}
 						>
-							Secondary
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "melee" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("melee")}
-						className={getFilterButtonClasses(foundryFilter === "melee")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "melee" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_melee.svg")',
-								WebkitMaskImage: 'url("/icons/icon_melee.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span className={getFilterLabelClasses(foundryFilter === "melee")}>
-							Melee
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "modular" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("modular")}
-						className={getFilterButtonClasses(foundryFilter === "modular")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "modular" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_appearance.svg")',
-								WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "modular")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "secondary" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_pistol.svg")',
+									WebkitMaskImage: 'url("/icons/icon_pistol.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "secondary")}
+							>
+								Secondary
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "melee" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("melee")}
+							className={getFilterButtonClasses(foundryFilter === "melee")}
 						>
-							Modular
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "companions" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("companions")}
-						className={getFilterButtonClasses(foundryFilter === "companions")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "companions" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_sentinel.svg")',
-								WebkitMaskImage: 'url("/icons/icon_sentinel.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span
-							className={getFilterLabelClasses(foundryFilter === "companions")}
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "melee" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_melee.svg")',
+									WebkitMaskImage: 'url("/icons/icon_melee.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "melee")}
+							>
+								Melee
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "modular" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("modular")}
+							className={getFilterButtonClasses(foundryFilter === "modular")}
 						>
-							Companions
-						</span>
-					</Button>
-					<Button
-						variant={foundryFilter === "pending" ? "default" : "outline"}
-						onClick={() => setAppFoundryFilter("pending")}
-						className={getFilterButtonClasses(foundryFilter === "pending")}
-					>
-						<span
-							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${foundryFilter === "pending" ? "bg-primary-foreground" : "bg-foreground"}`}
-							style={{
-								maskImage: 'url("/icons/icon_foundry.svg")',
-								WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
-								maskRepeat: "no-repeat",
-								WebkitMaskRepeat: "no-repeat",
-								maskPosition: "center",
-								WebkitMaskPosition: "center",
-								maskSize: "contain",
-								WebkitMaskSize: "contain",
-							}}
-						/>
-						<span className={getFilterLabelClasses(foundryFilter === "pending")}>
-							Pending
-						</span>
-					</Button>
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "modular" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_appearance.svg")',
+									WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "modular")}
+							>
+								Modular
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "companions" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("companions")}
+							className={getFilterButtonClasses(foundryFilter === "companions")}
+						>
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "companions" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_sentinel.svg")',
+									WebkitMaskImage: 'url("/icons/icon_sentinel.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(
+									foundryFilter === "companions",
+								)}
+							>
+								Companions
+							</span>
+						</Button>
+						<Button
+							variant={foundryFilter === "pending" ? "default" : "outline"}
+							onClick={() => setAppFoundryFilter("pending")}
+							className={getFilterButtonClasses(foundryFilter === "pending")}
+						>
+							<span
+								aria-hidden="true"
+								className={`h-6 w-6 shrink-0 ${foundryFilter === "pending" ? "bg-primary-foreground" : "bg-foreground"}`}
+								style={{
+									maskImage: 'url("/icons/icon_foundry.svg")',
+									WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
+									maskRepeat: "no-repeat",
+									WebkitMaskRepeat: "no-repeat",
+									maskPosition: "center",
+									WebkitMaskPosition: "center",
+									maskSize: "contain",
+									WebkitMaskSize: "contain",
+								}}
+							/>
+							<span
+								className={getFilterLabelClasses(foundryFilter === "pending")}
+							>
+								Pending
+							</span>
+						</Button>
 
-					<div className="flex-1" />
+						<div className="flex-1" />
 
-					<Input
-						type="text"
-						placeholder="Search items..."
-						value={searchQuery}
-						onChange={(e) => setSearchQuery(e.target.value)}
-						className="w-48 h-9"
-					/>
-				</div>
+						<Input
+							type="text"
+							placeholder="Search items..."
+							value={searchQuery}
+							onChange={(e) => setSearchQuery(e.target.value)}
+							className="w-48 h-9"
+						/>
+					</div>
 
 					{foundryFilter !== "pending" && (
 						<div className="flex flex-wrap items-center gap-1.5 mb-2">
@@ -1034,7 +1114,10 @@ export function FoundryPage({ error }: FoundryPageProps) {
 								className="cursor-pointer"
 								onClick={() => setFilterReadyToBuild((prev) => !prev)}
 							>
-								<Badge variant={filterReadyToBuild ? "default" : "outline"} className="text-xs cursor-pointer select-none">
+								<Badge
+									variant={filterReadyToBuild ? "default" : "outline"}
+									className="text-xs cursor-pointer select-none"
+								>
 									Ready to Build
 								</Badge>
 							</button>
@@ -1043,7 +1126,10 @@ export function FoundryPage({ error }: FoundryPageProps) {
 								className="cursor-pointer"
 								onClick={() => setFilterResurgence((prev) => !prev)}
 							>
-								<Badge variant={filterResurgence ? "default" : "outline"} className="text-xs cursor-pointer select-none">
+								<Badge
+									variant={filterResurgence ? "default" : "outline"}
+									className="text-xs cursor-pointer select-none"
+								>
 									Prime Resurgence
 								</Badge>
 							</button>
@@ -1065,7 +1151,10 @@ export function FoundryPage({ error }: FoundryPageProps) {
 									className="cursor-pointer"
 									onClick={clearAllFilters}
 								>
-									<Badge variant="destructive" className="text-xs cursor-pointer select-none">
+									<Badge
+										variant="destructive"
+										className="text-xs cursor-pointer select-none"
+									>
 										Clear All
 									</Badge>
 								</button>
@@ -1083,102 +1172,110 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 				<ScrollArea className="flex-1 min-h-0">
 					<div className="space-y-2">
-					{foundryFilter === "all" && (
-						<CollectionSection
-							items={filterItems(allCollectionItems)}
-							loading={loading}
-							emptyLoadingText="Loading item data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load item data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "all" && (
+							<CollectionSection
+								items={filterItems(allCollectionItems)}
+								loading={loading}
+								emptyLoadingText="Loading item data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load item data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "warframes" && (
-						<CollectionSection
-							items={filterItems(warframeItems)}
-							loading={loading}
-							emptyLoadingText="Loading warframe data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "warframes" && (
+							<CollectionSection
+								items={filterItems(warframeItems)}
+								loading={loading}
+								emptyLoadingText="Loading warframe data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "archwings" && (
-						<CollectionSection
-							items={filterItems(allArchwingItems)}
-							loading={loading}
-							emptyLoadingText="Loading archwing data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "archwings" && (
+							<CollectionSection
+								items={filterItems(allArchwingItems)}
+								loading={loading}
+								emptyLoadingText="Loading archwing data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "primary" && (
-						<CollectionSection
-							items={filterItems(primaryItems)}
-							loading={loading}
-							emptyLoadingText="Loading primary weapon data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "primary" && (
+							<CollectionSection
+								items={filterItems(primaryItems)}
+								loading={loading}
+								emptyLoadingText="Loading primary weapon data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "secondary" && (
-						<CollectionSection
-							items={filterItems(secondaryItems)}
-							loading={loading}
-							emptyLoadingText="Loading secondary weapon data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "secondary" && (
+							<CollectionSection
+								items={filterItems(secondaryItems)}
+								loading={loading}
+								emptyLoadingText="Loading secondary weapon data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "melee" && (
-						<CollectionSection
-							items={filterItems(meleeItems)}
-							loading={loading}
-							emptyLoadingText="Loading melee weapon data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "melee" && (
+							<CollectionSection
+								items={filterItems(meleeItems)}
+								loading={loading}
+								emptyLoadingText="Loading melee weapon data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "modular" && (
-						<CollectionSection
-							items={filterItems(modularWeaponItems)}
-							loading={loading}
-							emptyLoadingText="Loading modular weapon data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "modular" && (
+							<CollectionSection
+								items={filterItems(modularWeaponItems)}
+								loading={loading}
+								emptyLoadingText="Loading modular weapon data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "companions" && (
-						<CollectionSection
-							items={filterItems(companionItems)}
-							loading={loading}
-							emptyLoadingText="Loading companion data..."
-							emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
-							onOpenCraftingTree={setCraftingTreeItem}
-							isIngredientItem={isIngredientItem}
-						/>
-					)}
+						{foundryFilter === "companions" && (
+							<CollectionSection
+								items={filterItems(companionItems)}
+								loading={loading}
+								emptyLoadingText="Loading companion data..."
+								emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
+								onOpenCraftingTree={setCraftingTreeItem}
+								onOpenIngredientUsage={setIngredientUsageItem}
+								isIngredientItem={isIngredientItem}
+							/>
+						)}
 
-					{foundryFilter === "pending" && (
-						<PendingRecipesSection
-							pendingRecipes={pendingRecipeItems}
-							now={now}
-							loading={loading}
-							use24HourClock={use24HourClock}
-						/>
-					)}
+						{foundryFilter === "pending" && (
+							<PendingRecipesSection
+								pendingRecipes={pendingRecipeItems}
+								now={now}
+								loading={loading}
+								use24HourClock={use24HourClock}
+							/>
+						)}
 					</div>
 				</ScrollArea>
 			</div>
@@ -1189,6 +1286,15 @@ export function FoundryPage({ error }: FoundryPageProps) {
 					item={craftingTreeItem}
 					allItems={allCollectionItems}
 					onClose={() => setCraftingTreeItem(null)}
+				/>
+			) : null}
+
+			{ingredientUsageItem ? (
+				<IngredientUsageModal
+					item={ingredientUsageItem}
+					usedInItems={ingredientUsageItems}
+					onOpenCraftingTree={openCraftingTreeFromIngredientUsage}
+					onClose={() => setIngredientUsageItem(null)}
 				/>
 			) : null}
 		</div>

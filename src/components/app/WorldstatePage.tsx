@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime } from "@/lib/datetime.utils";
+import { capitalize } from "@/lib/utils";
 import {
 	getImageUrlForUniqueName,
 	normalizeLookupName,
@@ -42,17 +43,6 @@ interface CycleEntry {
 	label: string;
 	state: string;
 	expiry: Date | null;
-}
-
-function capitalize(value: string): string {
-	if (!value) {
-		return "Unknown";
-	}
-
-	return value
-		.split(/[_\s]+/)
-		.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-		.join(" ");
 }
 
 function formatCountdown(target: Date | null, nowMs: number): string {
@@ -155,7 +145,11 @@ function getCyclePlanetIcon(label: string): string {
 	return "/icons/icon_warframe.svg";
 }
 
-function resolveNodeLabel(rawValue: string, resolvedValue: string, regionName?: string): string {
+function resolveNodeLabel(
+	rawValue: string,
+	resolvedValue: string,
+	regionName?: string,
+): string {
 	if (!rawValue) {
 		return resolvedValue || "Unknown";
 	}
@@ -312,8 +306,8 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 		}
 
 		return (
-			worldstate.voidTraders.find((trader) =>
-				trader.character?.toLowerCase().includes("baro") === true,
+			worldstate.voidTraders.find(
+				(trader) => trader.character?.toLowerCase().includes("baro") === true,
 			) ?? worldstate.voidTrader
 		);
 	}, [worldstate]);
@@ -321,7 +315,12 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 	const weeklyTimers = useMemo<TimerEntry[]>(() => {
 		const now = new Date(nowMs);
 		if (!worldstate) {
-			return [{ label: "Weekly reset / Archon Hunt", target: getNextWeeklyReset(now) }];
+			return [
+				{
+					label: "Weekly reset / Archon Hunt",
+					target: getNextWeeklyReset(now),
+				},
+			];
 		}
 
 		const weeklyReset = getNextWeeklyReset(now);
@@ -378,7 +377,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 				continue;
 			}
 
-			iconByName.set(normalizeLookupName(warframe.displayName), warframe.imageUrl);
+			iconByName.set(
+				normalizeLookupName(warframe.displayName),
+				warframe.imageUrl,
+			);
 			iconByName.set(normalizeLookupName(warframe.name), warframe.imageUrl);
 		}
 
@@ -400,17 +402,29 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 
 		for (const warframe of warframes) {
 			if (warframe.imageUrl) {
-				iconByName.set(normalizeLookupName(warframe.displayName), warframe.imageUrl);
+				iconByName.set(
+					normalizeLookupName(warframe.displayName),
+					warframe.imageUrl,
+				);
 				iconByName.set(normalizeLookupName(warframe.name), warframe.imageUrl);
-				iconByItemType.set(normalizeStoreItemPath(warframe.type), warframe.imageUrl);
+				iconByItemType.set(
+					normalizeStoreItemPath(warframe.type),
+					warframe.imageUrl,
+				);
 			}
 		}
 
 		for (const weapon of weapons) {
 			if (weapon.imageUrl) {
-				iconByName.set(normalizeLookupName(weapon.displayName), weapon.imageUrl);
+				iconByName.set(
+					normalizeLookupName(weapon.displayName),
+					weapon.imageUrl,
+				);
 				iconByName.set(normalizeLookupName(weapon.name), weapon.imageUrl);
-				iconByItemType.set(normalizeStoreItemPath(weapon.type), weapon.imageUrl);
+				iconByItemType.set(
+					normalizeStoreItemPath(weapon.type),
+					weapon.imageUrl,
+				);
 			}
 		}
 
@@ -487,7 +501,9 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 				return byType;
 			}
 
-			const exact = primeResurgenceIconByName.iconByName.get(normalizeLookupName(itemName));
+			const exact = primeResurgenceIconByName.iconByName.get(
+				normalizeLookupName(itemName),
+			);
 			if (exact) {
 				return exact;
 			}
@@ -540,25 +556,46 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 	const primeResurgenceSections = useMemo(() => {
 		if (!worldstate) {
 			return {
-				warframes: [] as Array<ParsedWorldstate["vaultTrader"]["inventory"][number] & { displayItem: string }>,
-				weapons: [] as Array<ParsedWorldstate["vaultTrader"]["inventory"][number] & { displayItem: string }>,
+				warframes: [] as Array<
+					ParsedWorldstate["vaultTrader"]["inventory"][number] & {
+						displayItem: string;
+					}
+				>,
+				weapons: [] as Array<
+					ParsedWorldstate["vaultTrader"]["inventory"][number] & {
+						displayItem: string;
+					}
+				>,
 			};
 		}
 
-		const warframesSection: Array<ParsedWorldstate["vaultTrader"]["inventory"][number] & { displayItem: string }> = [];
-		const weaponsSection: Array<ParsedWorldstate["vaultTrader"]["inventory"][number] & { displayItem: string }> = [];
+		const warframesSection: Array<
+			ParsedWorldstate["vaultTrader"]["inventory"][number] & {
+				displayItem: string;
+			}
+		> = [];
+		const weaponsSection: Array<
+			ParsedWorldstate["vaultTrader"]["inventory"][number] & {
+				displayItem: string;
+			}
+		> = [];
 
 		for (const item of worldstate.vaultTrader.inventory) {
-			const displayItem = resolvePrimeResurgenceItemName(item.item, item.uniqueName);
+			const displayItem = resolvePrimeResurgenceItemName(
+				item.item,
+				item.uniqueName,
+			);
 			const normalizedName = normalizeLookupName(displayItem);
 			const normalizedType = normalizeStoreItemPath(item.uniqueName);
 
 			const isWarframe =
 				primeResurgenceClassifiers.warframeNames.has(normalizedName) ||
-				(normalizedType.length > 0 && primeResurgenceClassifiers.warframeTypes.has(normalizedType));
+				(normalizedType.length > 0 &&
+					primeResurgenceClassifiers.warframeTypes.has(normalizedType));
 			const isWeapon =
 				primeResurgenceClassifiers.weaponNames.has(normalizedName) ||
-				(normalizedType.length > 0 && primeResurgenceClassifiers.weaponTypes.has(normalizedType));
+				(normalizedType.length > 0 &&
+					primeResurgenceClassifiers.weaponTypes.has(normalizedType));
 
 			if (!isWarframe && !isWeapon) {
 				continue;
@@ -598,7 +635,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 
 		return baroTrader.inventory
 			.map((item) => {
-				const displayItem = resolveInventoryDisplayName(item.item, item.uniqueName);
+				const displayItem = resolveInventoryDisplayName(
+					item.item,
+					item.uniqueName,
+				);
 				return {
 					...item,
 					displayItem,
@@ -678,9 +718,13 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 								<div className="flex-1 min-w-0">
 									<div className="flex items-center gap-1.5 text-sm">
 										<span className="font-medium">{cycle.label}</span>
-										<Badge variant="outline" className="px-1.5 py-0">{capitalize(cycle.state)}</Badge>
+										<Badge variant="outline" className="px-1.5 py-0">
+											{capitalize(cycle.state)}
+										</Badge>
 									</div>
-									<p className="text-sm text-muted-foreground">{formatCountdown(cycle.expiry, nowMs)}</p>
+									<p className="text-sm text-muted-foreground">
+										{formatCountdown(cycle.expiry, nowMs)}
+									</p>
 								</div>
 							</CardContent>
 						</Card>
@@ -694,7 +738,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 								<CardTitle className="text-sm">Baro Ki&apos;Teer</CardTitle>
 								{baroTrader ? (
 									<>
-										<Badge variant={baroTrader.active ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+										<Badge
+											variant={baroTrader.active ? "default" : "secondary"}
+											className="text-[10px] px-1.5 py-0"
+										>
 											{baroTrader.active ? "Active" : "Away"}
 										</Badge>
 										<span className="text-xs text-muted-foreground">
@@ -731,10 +778,15 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 													className="object-contain rounded-sm size-5"
 													src={item.icon}
 												/>
-												<p className="text-xs font-medium truncate">{item.displayItem}</p>
+												<p className="text-xs font-medium truncate">
+													{item.displayItem}
+												</p>
 											</div>
 											<div className="flex items-center gap-1 shrink-0">
-												<Badge variant="outline" className="text-[10px] px-1 py-0 gap-1">
+												<Badge
+													variant="outline"
+													className="text-[10px] px-1 py-0 gap-1"
+												>
 													<img
 														alt="Ducats"
 														className="object-contain size-3"
@@ -742,7 +794,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 													/>
 													{item.ducats}
 												</Badge>
-												<Badge variant="outline" className="text-[10px] px-1 py-0 gap-1">
+												<Badge
+													variant="outline"
+													className="text-[10px] px-1 py-0 gap-1"
+												>
 													<img
 														alt="Credits"
 														className="object-contain size-3"
@@ -781,7 +836,12 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 												/>
 												<p className="text-sm font-medium">{group.tier}</p>
 											</div>
-											<Badge variant="outline" className="text-[10px] px-1.5 py-0">{group.fissures.length}</Badge>
+											<Badge
+												variant="outline"
+												className="text-[10px] px-1.5 py-0"
+											>
+												{group.fissures.length}
+											</Badge>
 										</div>
 										<div className="space-y-1">
 											{group.fissures.map((fissure) => (
@@ -809,7 +869,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 													</div>
 													<div className="flex items-center gap-1 shrink-0">
 														{fissure.isStorm ? (
-															<Badge className="gap-0.5 text-[10px] px-1.5 py-0" variant="secondary">
+															<Badge
+																className="gap-0.5 text-[10px] px-1.5 py-0"
+																variant="secondary"
+															>
 																<img
 																	alt="Void Storm"
 																	className="object-contain size-2.5"
@@ -819,7 +882,10 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 															</Badge>
 														) : null}
 														{fissure.isHard ? (
-															<Badge className="gap-0.5 text-[10px] px-1.5 py-0" variant="secondary">
+															<Badge
+																className="gap-0.5 text-[10px] px-1.5 py-0"
+																variant="secondary"
+															>
 																<img
 																	alt="Steel Path"
 																	className="object-contain size-2.5"
@@ -853,7 +919,9 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 								className="flex items-center justify-between gap-2 px-2.5 py-1.5 border rounded-md"
 							>
 								<p className="text-xs font-medium truncate">{entry.label}</p>
-								<span className="text-xs text-muted-foreground shrink-0">{formatCountdown(entry.target, nowMs)}</span>
+								<span className="text-xs text-muted-foreground shrink-0">
+									{formatCountdown(entry.target, nowMs)}
+								</span>
 							</div>
 						))}
 					</CardContent>
@@ -876,7 +944,12 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 											<p className="text-sm font-medium">
 												{getCircuitCategoryLabel(choice.category)}
 											</p>
-											<Badge variant="outline" className="text-[10px] px-1.5 py-0">{choice.choices.length}</Badge>
+											<Badge
+												variant="outline"
+												className="text-[10px] px-1.5 py-0"
+											>
+												{choice.choices.length}
+											</Badge>
 										</div>
 										<div className="grid grid-cols-2 gap-1">
 											{choice.choices.map((item) => (
@@ -884,11 +957,15 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 													key={item}
 													className="flex items-center gap-1.5 px-1.5 py-0.5 border rounded-md bg-secondary/20"
 												>
-													{circuitChoiceIconByName.get(normalizeLookupName(item)) ? (
+													{circuitChoiceIconByName.get(
+														normalizeLookupName(item),
+													) ? (
 														<img
 															alt={item}
 															className="object-cover rounded-sm size-5"
-															src={circuitChoiceIconByName.get(normalizeLookupName(item))}
+															src={circuitChoiceIconByName.get(
+																normalizeLookupName(item),
+															)}
 														/>
 													) : (
 														<div className="border rounded-sm size-5 bg-muted" />
@@ -907,7 +984,9 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 						<CardHeader className="px-4 py-0">
 							<div className="flex items-center justify-between">
 								<CardTitle className="text-sm">Prime Resurgence</CardTitle>
-								<span className="text-xs text-muted-foreground">{formatCountdown(primeResurgenceTimer.target, nowMs)}</span>
+								<span className="text-xs text-muted-foreground">
+									{formatCountdown(primeResurgenceTimer.target, nowMs)}
+								</span>
 							</div>
 						</CardHeader>
 						<CardContent className="px-4">
@@ -922,7 +1001,12 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 										<div className="p-2 border rounded-md">
 											<div className="flex items-center justify-between mb-1">
 												<p className="text-sm font-medium">Warframes</p>
-												<Badge variant="outline" className="text-[10px] px-1.5 py-0">{primeResurgenceSections.warframes.length}</Badge>
+												<Badge
+													variant="outline"
+													className="text-[10px] px-1.5 py-0"
+												>
+													{primeResurgenceSections.warframes.length}
+												</Badge>
 											</div>
 											<div className="grid grid-cols-2 gap-1">
 												{primeResurgenceSections.warframes.map((item) => (
@@ -933,9 +1017,14 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 														<img
 															alt={item.displayItem}
 															className="object-contain rounded-sm size-5"
-															src={getPrimeResurgenceIcon(item.displayItem, item.uniqueName)}
+															src={getPrimeResurgenceIcon(
+																item.displayItem,
+																item.uniqueName,
+															)}
 														/>
-														<p className="text-xs font-medium truncate">{item.displayItem}</p>
+														<p className="text-xs font-medium truncate">
+															{item.displayItem}
+														</p>
 													</div>
 												))}
 											</div>
@@ -945,7 +1034,12 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 										<div className="p-2 border rounded-md">
 											<div className="flex items-center justify-between mb-1">
 												<p className="text-sm font-medium">Weapons</p>
-												<Badge variant="outline" className="text-[10px] px-1.5 py-0">{primeResurgenceSections.weapons.length}</Badge>
+												<Badge
+													variant="outline"
+													className="text-[10px] px-1.5 py-0"
+												>
+													{primeResurgenceSections.weapons.length}
+												</Badge>
 											</div>
 											<div className="grid grid-cols-2 gap-1">
 												{primeResurgenceSections.weapons.map((item) => (
@@ -956,9 +1050,14 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 														<img
 															alt={item.displayItem}
 															className="object-contain rounded-sm size-5"
-															src={getPrimeResurgenceIcon(item.displayItem, item.uniqueName)}
+															src={getPrimeResurgenceIcon(
+																item.displayItem,
+																item.uniqueName,
+															)}
 														/>
-														<p className="text-xs font-medium truncate">{item.displayItem}</p>
+														<p className="text-xs font-medium truncate">
+															{item.displayItem}
+														</p>
 													</div>
 												))}
 											</div>
