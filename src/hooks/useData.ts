@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
+import { normalizeStoreItemPath } from "@/lib/warframe.utils";
 import type {
 	AssetEntry,
 	Companion,
@@ -21,20 +22,30 @@ import type {
 export function useData() {
 	const [assets, setAssets] = useState<AssetEntry[]>([]);
 	const [manifest, setManifest] = useState<ManifestEntry[]>([]);
-	const [warframeNames, setWarframeNames] = useState<Record<string, string>>({});
+	const [warframeNames, setWarframeNames] = useState<Record<string, string>>(
+		{},
+	);
 	const [warframeData, setWarframeData] = useState<
 		Record<string, ExportWarframeEntry>
 	>({});
 	const [weaponNames, setWeaponNames] = useState<Record<string, string>>({});
-	const [weaponData, setWeaponData] = useState<Record<string, ExportWeaponEntry>>({});
-	const [companionNames, setCompanionNames] = useState<Record<string, string>>({});
-	const [companionData, setCompanionData] = useState<Record<string, Companion>>({});
+	const [weaponData, setWeaponData] = useState<
+		Record<string, ExportWeaponEntry>
+	>({});
+	const [companionNames, setCompanionNames] = useState<Record<string, string>>(
+		{},
+	);
+	const [companionData, setCompanionData] = useState<Record<string, Companion>>(
+		{},
+	);
 	const [relicData, setRelicData] = useState<Record<string, VoidRelic>>({});
 	const [recipeData, setRecipeData] = useState<Record<string, RecipeData>>({});
 	const [recipeDucatValues, setRecipeDucatValues] = useState<
 		Record<string, number>
 	>({});
-	const [resourceNames, setResourceNames] = useState<Record<string, string>>({});
+	const [resourceNames, setResourceNames] = useState<Record<string, string>>(
+		{},
+	);
 	const [upgradeNames, setUpgradeNames] = useState<Record<string, string>>({});
 	const [indexLoading, setIndexLoading] = useState(true);
 	const [error, setError] = useState("");
@@ -65,9 +76,6 @@ export function useData() {
 		let cancelled = false;
 
 		async function loadData() {
-			const normalizeStoreItemPath = (value: string) =>
-				value.replace("/StoreItems", "");
-
 			const getRecipeSpecificityScore = (recipe: ExportRecipeEntry): number => {
 				const ingredients = Array.isArray(recipe.ingredients)
 					? recipe.ingredients
@@ -120,7 +128,12 @@ export function useData() {
 				const manifestData = JSON.parse(manifestResult.value) as {
 					Manifest?: ManifestEntry[];
 				};
-				setManifest(manifestData.Manifest || []);
+				if (Array.isArray(manifestData.Manifest)) {
+					setManifest(manifestData.Manifest);
+				} else {
+					setError("Manifest payload is missing Manifest entries");
+					console.error("Manifest payload missing Manifest array");
+				}
 			} else {
 				console.error("Failed to load manifest:", manifestResult.reason);
 			}
@@ -172,7 +185,9 @@ export function useData() {
 				const recipes: Record<string, RecipeData> = {};
 				const ducatValues: Record<string, number> = {};
 				for (const recipe of data.ExportRecipes as ExportRecipeEntry[]) {
-					const normalizedResultType = normalizeStoreItemPath(recipe.resultType);
+					const normalizedResultType = normalizeStoreItemPath(
+						recipe.resultType,
+					);
 					const normalizedRecipe: RecipeData = {
 						...recipe,
 						resultType: normalizedResultType,
@@ -180,10 +195,12 @@ export function useData() {
 							...ingredient,
 							ItemType: normalizeStoreItemPath(ingredient.ItemType),
 						})),
-						secretIngredients: (recipe.secretIngredients || []).map((ingredient) => ({
-							...ingredient,
-							ItemType: normalizeStoreItemPath(ingredient.ItemType),
-						})),
+						secretIngredients: (recipe.secretIngredients || []).map(
+							(ingredient) => ({
+								...ingredient,
+								ItemType: normalizeStoreItemPath(ingredient.ItemType),
+							}),
+						),
 					};
 
 					const existingRecipe = recipes[normalizedResultType];
@@ -215,12 +232,17 @@ export function useData() {
 			if (relicResult.status === "fulfilled") {
 				const data: ExportRelicArcaneWrapper = JSON.parse(relicResult.value);
 				const relicMap: Record<string, VoidRelic> = {};
-				for (const entry of data.ExportRelicArcane || []) {
-					if (
-						entry.uniqueName?.includes("/Lotus/Types/Game/Projections/") &&
-						Array.isArray(entry.relicRewards)
-					) {
-						relicMap[entry.uniqueName] = entry;
+				if (!Array.isArray(data.ExportRelicArcane)) {
+					setError("Relic payload is missing ExportRelicArcane entries");
+					console.error("Relic payload missing ExportRelicArcane array");
+				} else {
+					for (const entry of data.ExportRelicArcane) {
+						if (
+							entry.uniqueName?.includes("/Lotus/Types/Game/Projections/") &&
+							Array.isArray(entry.relicRewards)
+						) {
+							relicMap[entry.uniqueName] = entry;
+						}
 					}
 				}
 				setRelicData(relicMap);
@@ -238,7 +260,8 @@ export function useData() {
 						const normalizedUniqueName = normalizeStoreItemPath(
 							resource.uniqueName,
 						);
-						resourceDucatValues[resource.uniqueName] = resource.primeSellingPrice;
+						resourceDucatValues[resource.uniqueName] =
+							resource.primeSellingPrice;
 						resourceDucatValues[normalizedUniqueName] =
 							resource.primeSellingPrice;
 					}
@@ -255,8 +278,13 @@ export function useData() {
 			if (upgradeResult.status === "fulfilled") {
 				const data: ExportUpgradesWrapper = JSON.parse(upgradeResult.value);
 				const names: Record<string, string> = {};
-				for (const upgrade of data.ExportUpgrades || []) {
-					names[upgrade.uniqueName] = upgrade.name;
+				if (!Array.isArray(data.ExportUpgrades)) {
+					setError("Upgrade payload is missing ExportUpgrades entries");
+					console.error("Upgrade payload missing ExportUpgrades array");
+				} else {
+					for (const upgrade of data.ExportUpgrades) {
+						names[upgrade.uniqueName] = upgrade.name;
+					}
 				}
 				setUpgradeNames(names);
 			} else {

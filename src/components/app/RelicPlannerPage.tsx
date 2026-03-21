@@ -180,14 +180,16 @@ export function RelicPlannerPage() {
 				ownedCounts.set(normalized, (ownedCounts.get(normalized) ?? 0) + count);
 			};
 
-			const recipeEntries =
-				(inventoryData.Recipes as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+			const recipeEntries = Array.isArray(inventoryData.Recipes)
+				? (inventoryData.Recipes as Array<{ ItemType?: string; ItemCount?: number }>)
+				: [];
 			for (const entry of recipeEntries) {
 				addOwnedType(entry.ItemType, Math.max(1, entry.ItemCount ?? 1));
 			}
 
-			const miscEntries =
-				(inventoryData.MiscItems as Array<{ ItemType?: string; ItemCount?: number }> | undefined) ?? [];
+			const miscEntries = Array.isArray(inventoryData.MiscItems)
+				? (inventoryData.MiscItems as Array<{ ItemType?: string; ItemCount?: number }>)
+				: [];
 			for (const entry of miscEntries) {
 				addOwnedType(entry.ItemType, entry.ItemCount ?? 0);
 			}
@@ -209,8 +211,9 @@ export function RelicPlannerPage() {
 			] as const;
 
 			for (const key of inventoryKeys) {
-				const entries =
-					(inventoryData[key] as Array<{ ItemType?: string }> | undefined) ?? [];
+				const entries = Array.isArray(inventoryData[key])
+					? (inventoryData[key] as Array<{ ItemType?: string }>)
+					: [];
 				for (const entry of entries) {
 					addOwnedType(entry.ItemType, 1);
 				}
@@ -275,7 +278,7 @@ export function RelicPlannerPage() {
 			console.error("Failed to read daily market vaulted cache:", error);
 			return emptyLookup;
 		}
-	}, [relics]);
+	}, []);
 
 	const rewardVaultState = useMemo(() => {
 		const byRewardName = new Map<string, { total: number; vaulted: number }>();
@@ -382,7 +385,6 @@ export function RelicPlannerPage() {
 		ownedRewardCounts,
 		masteredOrOwnedTypes,
 		dailyMarketVaultLookup,
-		rewardVaultState,
 		squadSize,
 	]);
 
@@ -675,7 +677,7 @@ export function RelicPlannerPage() {
 													<div
 														key={`${relic.uniqueName}-${reward.rewardName}`}
 														className={`relative rounded border p-1 ${rewardRarityClasses(reward.rarity)}`}
-																		title={`${reward.rewardName.split("/").pop() || reward.rewardName} (${reward.rarity})${reward.itemCount > 1 ? ` x${reward.itemCount}` : ""}${reward.ducats > 0 ? ` • ${reward.ducats} ducats` : ""}${reward.platinum > 0 ? ` • ${reward.platinum} platinum` : ""}${(() => {
+															title={`${reward.rewardName} (${reward.rarity})${reward.itemCount > 1 ? ` x${reward.itemCount}` : ""}${reward.ducats > 0 ? ` • ${reward.ducats} ducats` : ""}${reward.platinum > 0 ? ` • ${reward.platinum} platinum` : ""}${(() => {
 																			const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 																			const rewardState = rewardVaultState.get(normalizedRewardName);
 																			if (!rewardState || rewardState.total === 0) {
@@ -687,10 +689,7 @@ export function RelicPlannerPage() {
 														{reward.imageUrl ? (
 															<img
 																src={reward.imageUrl}
-																alt={
-																	reward.rewardName.split("/").pop() ||
-																	reward.rewardName
-																}
+																alt={reward.rewardName}
 																className="object-cover w-12 h-12 mx-auto rounded"
 															/>
 														) : (

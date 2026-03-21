@@ -313,7 +313,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 
 		return (
 			worldstate.voidTraders.find((trader) =>
-				trader.character.toLowerCase().includes("baro"),
+				trader.character?.toLowerCase().includes("baro") === true,
 			) ?? worldstate.voidTrader
 		);
 	}, [worldstate]);

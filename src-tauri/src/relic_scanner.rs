@@ -152,9 +152,9 @@ pub struct RelicScanSlotResult {
 pub struct RelicScanTriggeredEvent {
     source: String,
     triggered_at: u64,
-    reward_candidates: Vec<String>,
-    slot_results: Vec<RelicScanSlotResult>,
-    detected_slot_count: u8,
+    reward_candidates: Option<Vec<String>>,
+    slot_results: Option<Vec<RelicScanSlotResult>>,
+    detected_slot_count: Option<u8>,
     log_markers: Vec<String>,
     auto_delay_mode: Option<String>,
     auto_delay_ms: Option<u64>,
@@ -644,18 +644,18 @@ fn emit_scan_result(
     trigger_detail: Option<String>,
     error: Option<String>,
 ) {
-    let reward_candidates = output
-        .as_ref()
-        .map(|value| value.reward_candidates.clone())
-        .unwrap_or_default();
-    let slot_results = output
-        .as_ref()
-        .map(|value| value.slot_results.clone())
-        .unwrap_or_default();
-    let detected_slot_count = output
-        .as_ref()
-        .map(|value| value.detected_slot_count)
-        .unwrap_or(0);
+    let reward_candidates = output.as_ref().map(|value| value.reward_candidates.clone());
+    let slot_results = output.as_ref().map(|value| value.slot_results.clone());
+    let detected_slot_count = output.as_ref().map(|value| value.detected_slot_count);
+    let normalized_error = if error.is_none()
+        && reward_candidates
+            .as_ref()
+            .is_some_and(|candidates| candidates.is_empty())
+    {
+        Some("No rewards detected in scan result".to_string())
+    } else {
+        error
+    };
 
     let _ = app.emit(
         "relic-scan-triggered",
@@ -669,7 +669,7 @@ fn emit_scan_result(
             auto_delay_mode,
             auto_delay_ms,
             trigger_detail,
-            error,
+            error: normalized_error,
         },
     );
 }

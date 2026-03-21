@@ -162,7 +162,7 @@ interface DailyMarketPriceLookup {
 interface ScannerEventPayload {
 	source: RelicScanTriggerSource;
 	triggeredAt: number;
-	rewardCandidates: string[];
+	rewardCandidates?: string[];
 	slotResults?: Array<{
 		slotIndex: number;
 		displayIndex?: number;
@@ -225,11 +225,6 @@ function getUtcDayKey(dateLike: Date | number | string = Date.now()): string {
 		return new Date().toISOString().slice(0, 10);
 	}
 	return parsed.toISOString().slice(0, 10);
-}
-
-function getRewardFallbackName(rewardName: string): string {
-	const tail = rewardName.split("/").pop() || rewardName;
-	return tail.replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
 }
 
 function normalizeOcrText(value: string): string {
@@ -420,9 +415,13 @@ function buildOwnedRelics(
 				? calculateExpectedPlatinum(relicRewards, refinementLevel)
 				: 0;
 
+			if (!relic?.name) {
+				return null;
+			}
+
 			return {
 				uniqueName,
-				name: relic?.name ?? uniqueName.split("/").pop() ?? "Unknown Relic",
+				name: relic.name,
 				description: relic?.description ?? "",
 				count,
 				imageUrl,
@@ -434,6 +433,7 @@ function buildOwnedRelics(
 				relicRewards,
 			};
 		})
+		.filter((entry): entry is OwnedRelic => entry !== null)
 		.sort(
 			(a, b) =>
 				a.name.localeCompare(b.name) || b.refinementLevel - a.refinementLevel,
@@ -573,8 +573,10 @@ function AppMain() {
 				resourceNames[recipe.resultType] ||
 				weaponNames[recipe.resultType] ||
 				warframeNames[recipe.resultType] ||
-				companionNames[recipe.resultType] ||
-				getRewardFallbackName(recipe.resultType);
+				companionNames[recipe.resultType];
+			if (!resultDisplayName) {
+				continue;
+			}
 
 			const isBlueprint = /blueprint/i.test(normalizedRecipeName);
 			recipeDisplayNameByUniqueName.set(
@@ -606,8 +608,10 @@ function AppMain() {
 					weaponNames[rewardName] ||
 					warframeNames[rewardName] ||
 					companionNames[rewardName] ||
-					recipeDisplayNameByUniqueName.get(rewardName) ||
-					getRewardFallbackName(rewardName);
+					recipeDisplayNameByUniqueName.get(rewardName);
+				if (!displayName) {
+					continue;
+				}
 				const imageUrl = getImageUrlForUniqueName(
 					rewardName,
 					manifestTextureByUniqueName,
@@ -804,8 +808,7 @@ function AppMain() {
 
 		const byRewardName: Record<string, string> = {};
 		for (const entry of scannerRewardLookup) {
-			const fallbackName = getRewardFallbackName(entry.rewardName);
-			const candidateNames = new Set<string>([entry.displayName, fallbackName]);
+			const candidateNames = new Set<string>([entry.displayName]);
 			if (!/\bblueprint$/i.test(entry.displayName)) {
 				candidateNames.add(`${entry.displayName} Blueprint`);
 			}
@@ -830,16 +833,16 @@ function AppMain() {
 	}, [dailyMarketPriceLookup, scannerRewardLookup]);
 
 	const getDailyMarketPriceForReward = useCallback(
-		(rewardName: string): number => {
+		(rewardName: string): number | null => {
 			const lookup = dailyMarketPriceLookup;
 			if (!lookup) {
-				return 0;
+				return null;
 			}
 
 			const normalizedRewardName = normalizeStoreItemPath(rewardName);
 			const mappedSlug = dailyMarketSlugByRewardName[normalizedRewardName];
 			if (mappedSlug) {
-				return lookup.pricesBySlug[mappedSlug] ?? 0;
+				return lookup.pricesBySlug[mappedSlug] ?? null;
 			}
 
 			const displayName =
@@ -847,19 +850,21 @@ function AppMain() {
 				resourceNames[normalizedRewardName] ||
 				weaponNames[normalizedRewardName] ||
 				warframeNames[normalizedRewardName] ||
-				companionNames[normalizedRewardName] ||
-				getRewardFallbackName(normalizedRewardName);
+				companionNames[normalizedRewardName];
+			if (!displayName) {
+				return null;
+			}
 
 			const normalizedDisplayName = normalizeMarketName(displayName);
 			const slugByName = lookup.slugByName[normalizedDisplayName];
 			if (slugByName) {
-				return lookup.pricesBySlug[slugByName] ?? 0;
+				return lookup.pricesBySlug[slugByName] ?? null;
 			}
 
 			return (
 				lookup.pricesBySlug[slugifyMarketName(displayName)] ??
 				lookup.pricesByName[normalizedDisplayName] ??
-				0
+				null
 			);
 		},
 		[
@@ -977,9 +982,12 @@ function AppMain() {
 					}
 				}
 
-				const resolvedDisplayName =
-					displayName || getRewardFallbackName(normalizedRewardName);
-				const platinum = getDailyMarketPriceForReward(normalizedRewardName);
+				if (!displayName) {
+					continue;
+				}
+
+				const platinumValue = getDailyMarketPriceForReward(normalizedRewardName);
+				const platinum = platinumValue ?? 0;
 				const ducats =
 					recipeDucatValues[normalizedRewardName] ??
 					recipeDucatValues[candidate] ??
@@ -987,7 +995,7 @@ function AppMain() {
 
 				values.push({
 					rewardName: normalizedRewardName,
-					displayName: resolvedDisplayName,
+					displayName,
 					position:
 						typeof entry.displayIndex === "number" &&
 						entry.displayIndex >= 1 &&
@@ -999,7 +1007,7 @@ function AppMain() {
 					platinum,
 					ducats,
 					confidence,
-					priceSource: platinum > 0 ? "daily-snapshot" : "none",
+					priceSource: platinumValue !== null ? "daily-snapshot" : "none",
 					ducatSource: ducats > 0 ? "recipe" : "none",
 				});
 			}
@@ -1778,7 +1786,12 @@ function AppMain() {
 			const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 			const directPrice = getDailyMarketPriceForReward(normalizedRewardName);
 
-			if (nextValues[normalizedRewardName] !== directPrice) {
+			if (directPrice === null) {
+				if (nextValues[normalizedRewardName] !== undefined) {
+					delete nextValues[normalizedRewardName];
+					hasChanges = true;
+				}
+			} else if (nextValues[normalizedRewardName] !== directPrice) {
 				nextValues[normalizedRewardName] = directPrice;
 				hasChanges = true;
 			}
@@ -1975,13 +1988,14 @@ function AppMain() {
 					const recipe = recipeByUniqueName.get(entry.ItemType);
 					const resultType = recipe?.resultType ?? entry.ItemType;
 					const buildTime = recipe?.buildTime;
-					const fallbackName = resultType.split("/").pop() || "Recipe";
 					const displayName =
 						weaponNames[resultType] ||
 						warframeNames[resultType] ||
 						companionNames[resultType] ||
-						resourceNames[resultType] ||
-						fallbackName;
+						resourceNames[resultType];
+					if (!displayName) {
+						return null;
+					}
 					const imageUrl = getImageUrlForUniqueName(resultType, manifestMap);
 
 					return {
@@ -2015,8 +2029,8 @@ function AppMain() {
 					warframeNames[normalizedItemType] ||
 					companionNames[normalizedItemType] ||
 					resourceNames[normalizedItemType] ||
-					normalizedItemType.split("/").pop() ||
-					"Part";
+					normalizedItemType ||
+					itemType;
 				const partIcon = getImageUrlForUniqueName(
 					normalizedItemType || itemType,
 					manifestMap,
