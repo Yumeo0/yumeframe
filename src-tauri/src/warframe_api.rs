@@ -2,8 +2,11 @@ use read_process_memory::{copy_address, Pid, ProcessHandle};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::fs;
-use std::io::{BufReader, BufRead};
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::io::{BufRead, BufReader};
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
 use sysinfo::System;
 use tauri::{AppHandle, Manager};
 
