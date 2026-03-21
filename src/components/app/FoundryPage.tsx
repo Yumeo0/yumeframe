@@ -27,6 +27,44 @@ export type FoundryFilter =
 	| "companions"
 	| "pending";
 
+interface FoundryCategoryButton {
+	filter: FoundryFilter;
+	label: string;
+	iconPath: string;
+}
+
+const FOUNDRY_CATEGORY_BUTTONS: FoundryCategoryButton[] = [
+	{ filter: "all", label: "All", iconPath: "/icons/icon_mastery.svg" },
+	{
+		filter: "warframes",
+		label: "Warframes",
+		iconPath: "/icons/icon_warframe.svg",
+	},
+	{
+		filter: "archwings",
+		label: "Archwings",
+		iconPath: "/icons/icon_archwing.svg",
+	},
+	{ filter: "primary", label: "Primary", iconPath: "/icons/icon_rifle.svg" },
+	{
+		filter: "secondary",
+		label: "Secondary",
+		iconPath: "/icons/icon_pistol.svg",
+	},
+	{ filter: "melee", label: "Melee", iconPath: "/icons/icon_melee.svg" },
+	{
+		filter: "modular",
+		label: "Modular",
+		iconPath: "/icons/icon_appearance.svg",
+	},
+	{
+		filter: "companions",
+		label: "Companions",
+		iconPath: "/icons/icon_sentinel.svg",
+	},
+	{ filter: "pending", label: "Pending", iconPath: "/icons/icon_foundry.svg" },
+];
+
 interface FoundryPageProps {
 	error: string;
 }
@@ -452,6 +490,42 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			weapon.uniqueName.includes("Modular") === false,
 	);
 
+	const mapWeaponToItem = (
+		weapon: (typeof filteredWeapons)[number],
+		displayNameTransform?: (displayName: string) => string,
+	): CollectionItem => ({
+		key: weapon.type,
+		name: weapon.name,
+		displayName: displayNameTransform
+			? displayNameTransform(weapon.displayName)
+			: weapon.displayName,
+		xp: weapon.xp,
+		isWeapon: true,
+		maxLevel:
+			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
+		imageUrl: weapon.imageUrl,
+		favorite: weapon.favorite,
+		owned: weapon.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
+		parts: weapon.requirements.map(mapRequirementToPart),
+	});
+
+	const mapCompanionToItem = (
+		companion: (typeof companions)[number],
+	): CollectionItem => ({
+		key: companion.type,
+		name: companion.name,
+		displayName: companion.displayName,
+		xp: companion.xp,
+		isWeapon: false,
+		maxLevel: 30,
+		imageUrl: companion.imageUrl,
+		favorite: companion.favorite,
+		owned: companion.owned,
+		isCraftingRecipe: pendingRecipeResultTypes.has(companion.type),
+		parts: companion.requirements.map(mapRequirementToPart),
+	});
+
 	const mapRequirementToPart = (
 		requirement: CollectionPart,
 	): CollectionPart => ({
@@ -496,21 +570,10 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		parts: wf.parts.map(mapRequirementToPart),
 	}));
 
-	const archwingWeaponItems: CollectionItem[] = archwingWeapons.map(
-		(weapon) => ({
-			key: weapon.type,
-			name: weapon.name,
-			displayName: weapon.displayName.replace("<ARCHWING> ", ""),
-			xp: weapon.xp,
-			isWeapon: true,
-			maxLevel:
-				(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-			imageUrl: weapon.imageUrl,
-			favorite: weapon.favorite,
-			owned: weapon.owned,
-			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-			parts: weapon.requirements.map(mapRequirementToPart),
-		}),
+	const archwingWeaponItems: CollectionItem[] = archwingWeapons.map((weapon) =>
+		mapWeaponToItem(weapon, (displayName) =>
+			displayName.replace("<ARCHWING> ", ""),
+		),
 	);
 
 	const allArchwingItems = [...archwingItems, ...archwingWeaponItems].sort(
@@ -533,97 +596,28 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		(weapon) => weapon.productCategory === "SentinelWeapons",
 	);
 
-	const primaryItems: CollectionItem[] = primaryWeapons.map((weapon) => ({
-		key: weapon.type,
-		name: weapon.name,
-		displayName: weapon.displayName,
-		xp: weapon.xp,
-		isWeapon: true,
-		maxLevel:
-			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-		imageUrl: weapon.imageUrl,
-		favorite: weapon.favorite,
-		owned: weapon.owned,
-		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map(mapRequirementToPart),
-	}));
-
-	const secondaryItems: CollectionItem[] = secondaryWeapons.map((weapon) => ({
-		key: weapon.type,
-		name: weapon.name,
-		displayName: weapon.displayName,
-		xp: weapon.xp,
-		isWeapon: true,
-		maxLevel:
-			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-		imageUrl: weapon.imageUrl,
-		favorite: weapon.favorite,
-		owned: weapon.owned,
-		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map(mapRequirementToPart),
-	}));
-
-	const meleeItems: CollectionItem[] = meleeWeapons.map((weapon) => ({
-		key: weapon.type,
-		name: weapon.name,
-		displayName: weapon.displayName,
-		xp: weapon.xp,
-		isWeapon: true,
-		maxLevel:
-			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-		imageUrl: weapon.imageUrl,
-		favorite: weapon.favorite,
-		owned: weapon.owned,
-		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map(mapRequirementToPart),
-	}));
-
-	const modularWeaponItems: CollectionItem[] = modularWeapons.map((weapon) => ({
-		key: weapon.type,
-		name: weapon.name,
-		displayName: weapon.displayName,
-		xp: weapon.xp,
-		isWeapon: true,
-		maxLevel:
-			(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-		imageUrl: weapon.imageUrl,
-		favorite: weapon.favorite,
-		owned: weapon.owned,
-		isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-		parts: weapon.requirements.map(mapRequirementToPart),
-	}));
-
-	const companionCompanionItems: CollectionItem[] = companions.map(
-		(companion) => ({
-			key: companion.type,
-			name: companion.name,
-			displayName: companion.displayName,
-			xp: companion.xp,
-			isWeapon: false,
-			maxLevel: 30,
-			imageUrl: companion.imageUrl,
-			favorite: companion.favorite,
-			owned: companion.owned,
-			isCraftingRecipe: pendingRecipeResultTypes.has(companion.type),
-			parts: companion.requirements.map(mapRequirementToPart),
-		}),
+	const primaryItems: CollectionItem[] = primaryWeapons.map((weapon) =>
+		mapWeaponToItem(weapon),
 	);
 
-	const companionWeaponItems: CollectionItem[] = sentinelWeapons.map(
-		(weapon) => ({
-			key: weapon.type,
-			name: weapon.name,
-			displayName: weapon.displayName,
-			xp: weapon.xp,
-			isWeapon: true,
-			maxLevel:
-				(weapon as { maxLevel?: number }).maxLevel ?? weapon.maxLevelCap ?? 30,
-			imageUrl: weapon.imageUrl,
-			favorite: weapon.favorite,
-			owned: weapon.owned,
-			isCraftingRecipe: pendingRecipeResultTypes.has(weapon.type),
-			parts: weapon.requirements.map(mapRequirementToPart),
-		}),
+	const secondaryItems: CollectionItem[] = secondaryWeapons.map((weapon) =>
+		mapWeaponToItem(weapon),
+	);
+
+	const meleeItems: CollectionItem[] = meleeWeapons.map((weapon) =>
+		mapWeaponToItem(weapon),
+	);
+
+	const modularWeaponItems: CollectionItem[] = modularWeapons.map((weapon) =>
+		mapWeaponToItem(weapon),
+	);
+
+	const companionCompanionItems: CollectionItem[] = companions.map(
+		mapCompanionToItem,
+	);
+
+	const companionWeaponItems: CollectionItem[] = sentinelWeapons.map((weapon) =>
+		mapWeaponToItem(weapon),
 	);
 
 	const pendingRecipeItems: PendingRecipeItem[] = pendingRecipes.map(
@@ -855,231 +849,36 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			>
 				<div className="sticky top-0 z-10 bg-background">
 					<div className="flex flex-wrap items-center gap-2 mb-2">
-						<Button
-							variant={foundryFilter === "all" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("all")}
-							className={getFilterButtonClasses(foundryFilter === "all")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "all" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_mastery.svg")',
-									WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span className={getFilterLabelClasses(foundryFilter === "all")}>
-								All
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "warframes" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("warframes")}
-							className={getFilterButtonClasses(foundryFilter === "warframes")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "warframes" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_warframe.svg")',
-									WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "warframes")}
-							>
-								Warframes
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "archwings" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("archwings")}
-							className={getFilterButtonClasses(foundryFilter === "archwings")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "archwings" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_archwing.svg")',
-									WebkitMaskImage: 'url("/icons/icon_archwing.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "archwings")}
-							>
-								Archwings
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "primary" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("primary")}
-							className={getFilterButtonClasses(foundryFilter === "primary")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "primary" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_rifle.svg")',
-									WebkitMaskImage: 'url("/icons/icon_rifle.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "primary")}
-							>
-								Primary
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "secondary" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("secondary")}
-							className={getFilterButtonClasses(foundryFilter === "secondary")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "secondary" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_pistol.svg")',
-									WebkitMaskImage: 'url("/icons/icon_pistol.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "secondary")}
-							>
-								Secondary
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "melee" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("melee")}
-							className={getFilterButtonClasses(foundryFilter === "melee")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "melee" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_melee.svg")',
-									WebkitMaskImage: 'url("/icons/icon_melee.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "melee")}
-							>
-								Melee
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "modular" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("modular")}
-							className={getFilterButtonClasses(foundryFilter === "modular")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "modular" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_appearance.svg")',
-									WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "modular")}
-							>
-								Modular
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "companions" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("companions")}
-							className={getFilterButtonClasses(foundryFilter === "companions")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "companions" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_sentinel.svg")',
-									WebkitMaskImage: 'url("/icons/icon_sentinel.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(
-									foundryFilter === "companions",
-								)}
-							>
-								Companions
-							</span>
-						</Button>
-						<Button
-							variant={foundryFilter === "pending" ? "default" : "outline"}
-							onClick={() => setAppFoundryFilter("pending")}
-							className={getFilterButtonClasses(foundryFilter === "pending")}
-						>
-							<span
-								aria-hidden="true"
-								className={`h-6 w-6 shrink-0 ${foundryFilter === "pending" ? "bg-primary-foreground" : "bg-foreground"}`}
-								style={{
-									maskImage: 'url("/icons/icon_foundry.svg")',
-									WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
-									maskRepeat: "no-repeat",
-									WebkitMaskRepeat: "no-repeat",
-									maskPosition: "center",
-									WebkitMaskPosition: "center",
-									maskSize: "contain",
-									WebkitMaskSize: "contain",
-								}}
-							/>
-							<span
-								className={getFilterLabelClasses(foundryFilter === "pending")}
-							>
-								Pending
-							</span>
-						</Button>
+						{FOUNDRY_CATEGORY_BUTTONS.map((category) => {
+							const isActive = foundryFilter === category.filter;
+
+							return (
+								<Button
+									key={category.filter}
+									variant={isActive ? "default" : "outline"}
+									onClick={() => setAppFoundryFilter(category.filter)}
+									className={getFilterButtonClasses(isActive)}
+								>
+									<span
+										aria-hidden="true"
+										className={`h-6 w-6 shrink-0 ${isActive ? "bg-primary-foreground" : "bg-foreground"}`}
+										style={{
+											maskImage: `url("${category.iconPath}")`,
+											WebkitMaskImage: `url("${category.iconPath}")`,
+											maskRepeat: "no-repeat",
+											WebkitMaskRepeat: "no-repeat",
+											maskPosition: "center",
+											WebkitMaskPosition: "center",
+											maskSize: "contain",
+											WebkitMaskSize: "contain",
+										}}
+									/>
+									<span className={getFilterLabelClasses(isActive)}>
+										{category.label}
+									</span>
+								</Button>
+							);
+						})}
 
 						<div className="flex-1" />
 
