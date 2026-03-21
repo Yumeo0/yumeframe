@@ -27,12 +27,21 @@ import {
 	calculateExpectedPlatinum,
 } from "@/lib/relics.utils";
 import {
+	buildManifestTextureLookup,
+	getDataForUniqueName,
+	getImageUrlForUniqueName,
+	normalizeMarketName,
+	normalizeStoreItemPath,
+	slugifyMarketName,
+} from "@/lib/warframe.utils";
+import {
 	appStore,
 	setAppActiveTab,
 	setAppCompanions,
 	setAppEeLogPath,
 	setAppInventoryAutoRefreshEnabled,
 	setAppInventoryAutoRefreshIntervalSeconds,
+	setAppManifestTextureLocations,
 	setAppPendingRecipes,
 	setAppPrimeResurgenceItemTypes,
 	setAppRelicOverlayEnabled,
@@ -48,6 +57,7 @@ import {
 	setAppRelics,
 	setAppRewardPlatinumFetchedAt,
 	setAppRewardPlatinumValues,
+	setAppUpgradeNames,
 	setAppUse24HourClock,
 	setAppWarframes,
 	setAppWeapons,
@@ -89,7 +99,10 @@ const WFM_DAILY_MARKET_PRICES_URL =
 	"https://raw.githubusercontent.com/Yumeo0/wfmarket-prices/refs/heads/main/data/warframe-market-prices.json";
 
 function getPathBaseName(path: string): string {
-	const segments = path.trim().replace(/[\\/]+$/, "").split(/[\\/]/);
+	const segments = path
+		.trim()
+		.replace(/[\\/]+$/, "")
+		.split(/[\\/]/);
 	return segments.length > 0 ? segments[segments.length - 1] : "";
 }
 
@@ -105,7 +118,8 @@ function normalizeEeLogPath(path: string): string {
 		return withoutTrailingSeparators;
 	}
 
-	const looksLikeDirectoryInput = /[\\/]$/.test(trimmed) || lastSegment === "warframe";
+	const looksLikeDirectoryInput =
+		/[\\/]$/.test(trimmed) || lastSegment === "warframe";
 	if (!looksLikeDirectoryInput) {
 		return withoutTrailingSeparators;
 	}
@@ -194,10 +208,6 @@ interface RewardGuessDebugEntry {
 	}>;
 }
 
-function normalizeRewardGameRef(gameRef: string): string {
-	return gameRef.replace("/StoreItems", "");
-}
-
 function estimateTopOrderPrice(orders: MarketTopOrders): number {
 	const sellOrders = orders.sell ?? [];
 
@@ -215,18 +225,6 @@ function getUtcDayKey(dateLike: Date | number | string = Date.now()): string {
 		return new Date().toISOString().slice(0, 10);
 	}
 	return parsed.toISOString().slice(0, 10);
-}
-
-function normalizeMarketName(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/['’]/g, "")
-		.replace(/[^a-z0-9]+/g, " ")
-		.trim();
-}
-
-function slugifyMarketName(value: string): string {
-	return normalizeMarketName(value).replace(/\s+/g, "_");
 }
 
 function getRewardFallbackName(rewardName: string): string {
@@ -334,10 +332,7 @@ function buildOwnedRelics(
 	rewardPlatinumValues: Record<string, number>,
 	rewardPlatinumFetchedAt: Record<string, number>,
 ): OwnedRelic[] {
-	const manifestMap = new Map<string, string>();
-	for (const entry of manifest) {
-		manifestMap.set(entry.uniqueName, entry.textureLocation);
-	}
+	const manifestMap = buildManifestTextureLookup(manifest);
 
 	const getRefinement = (
 		itemType: string,
@@ -372,39 +367,49 @@ function buildOwnedRelics(
 
 	return [...relicCounts.entries()]
 		.map(([uniqueName, count]) => {
-			const relic = relicData[uniqueName];
-			const textureLocation = manifestMap.get(uniqueName) || "";
-			const imageUrl = textureLocation
-				? `http://content.warframe.com/PublicExport${textureLocation}`
-				: "";
-			const { refinement, refinementLevel } = getRefinement(uniqueName);
-			const relicRewards = (relic?.relicRewards ?? []).map((reward) => {
-				const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
-				const rewardTextureLocation =
-					manifestMap.get(normalizedRewardName) || "";
-				const rewardImageUrl = rewardTextureLocation
-					? `http://content.warframe.com/PublicExport${rewardTextureLocation}`
-					: "";
-				const ducats =
-					recipeDucatValues[reward.rewardName] ??
-					recipeDucatValues[normalizedRewardName] ??
-					0;
-				const platinum =
-					rewardPlatinumValues[reward.rewardName] ??
-					rewardPlatinumValues[normalizedRewardName] ??
-					0;
-				return {
-					...reward,
-					imageUrl: rewardImageUrl,
-					ducats,
-					platinum,
-				};
+			const lookup = getDataForUniqueName(uniqueName, {
+				manifest: manifestMap,
+				relics: relicData,
+				rewardDucatValues: recipeDucatValues,
+				rewardPlatinumValues: rewardPlatinumValues,
 			});
+			const resolvedRelic = lookup?.resolvedRelic;
+			const relic = resolvedRelic ?? relicData[uniqueName];
+			const imageUrl =
+				resolvedRelic?.imageUrl ||
+				lookup?.imageUrl ||
+				getImageUrlForUniqueName(uniqueName, manifestMap);
+			const { refinement, refinementLevel } = getRefinement(uniqueName);
+			const relicRewards: OwnedRelic["relicRewards"] =
+				resolvedRelic?.relicRewards ??
+				(relic?.relicRewards ?? []).map((reward: VoidRelic["relicRewards"][number]) => {
+					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
+					const rewardImageUrl = getImageUrlForUniqueName(
+						normalizedRewardName,
+						manifestMap,
+					);
+					const ducats =
+						recipeDucatValues[reward.rewardName] ??
+						recipeDucatValues[normalizedRewardName] ??
+						0;
+					const platinum =
+						rewardPlatinumValues[reward.rewardName] ??
+						rewardPlatinumValues[normalizedRewardName] ??
+						0;
+					return {
+						...reward,
+						rewardName: normalizedRewardName,
+						imageUrl: rewardImageUrl,
+						ducats,
+						platinum,
+					};
+				});
 			const isPlatinumReady = relicRewards.every((reward) => {
-				const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
 				return (
 					rewardPlatinumFetchedAt[reward.rewardName] !== undefined ||
-					rewardPlatinumFetchedAt[normalizedRewardName] !== undefined
+					rewardPlatinumFetchedAt[
+						normalizeStoreItemPath(reward.rewardName)
+					] !== undefined
 				);
 			});
 			const expectedDucats = calculateExpectedDucats(
@@ -456,9 +461,18 @@ function AppMain() {
 		recipeData,
 		recipeDucatValues,
 		resourceNames,
+		upgradeNames,
 		indexLoading,
 		error: dataError,
 	} = useData();
+
+	useEffect(() => {
+		setAppUpgradeNames(upgradeNames);
+	}, [upgradeNames]);
+
+	useEffect(() => {
+		setAppManifestTextureLocations(buildManifestTextureLookup(manifest));
+	}, [manifest]);
 	const activeTab = useStore(appStore, (state) => state.activeTab);
 	const rewardPlatinumValues = useStore(
 		appStore,
@@ -546,14 +560,11 @@ function AppMain() {
 	}, [relicScannerHotkey]);
 
 	const scannerRewardLookup = useMemo(() => {
-		const manifestTextureByUniqueName = new Map<string, string>();
-		for (const entry of manifest) {
-			manifestTextureByUniqueName.set(entry.uniqueName, entry.textureLocation);
-		}
+		const manifestTextureByUniqueName = buildManifestTextureLookup(manifest);
 
 		const recipeDisplayNameByUniqueName = new Map<string, string>();
 		for (const recipe of Object.values(recipeData)) {
-			const normalizedRecipeName = normalizeRewardGameRef(recipe.uniqueName);
+			const normalizedRecipeName = normalizeStoreItemPath(recipe.uniqueName);
 			if (recipeDisplayNameByUniqueName.has(normalizedRecipeName)) {
 				continue;
 			}
@@ -585,7 +596,7 @@ function AppMain() {
 
 		for (const relic of Object.values(relicData)) {
 			for (const reward of relic.relicRewards ?? []) {
-				const rewardName = normalizeRewardGameRef(reward.rewardName);
+				const rewardName = normalizeStoreItemPath(reward.rewardName);
 				if (byRewardName.has(rewardName)) {
 					continue;
 				}
@@ -597,11 +608,10 @@ function AppMain() {
 					companionNames[rewardName] ||
 					recipeDisplayNameByUniqueName.get(rewardName) ||
 					getRewardFallbackName(rewardName);
-				const textureLocation =
-					manifestTextureByUniqueName.get(rewardName) || "";
-				const imageUrl = textureLocation
-					? `http://content.warframe.com/PublicExport${textureLocation}`
-					: "";
+				const imageUrl = getImageUrlForUniqueName(
+					rewardName,
+					manifestTextureByUniqueName,
+				);
 
 				byRewardName.set(rewardName, {
 					rewardName,
@@ -691,7 +701,7 @@ function AppMain() {
 					return;
 				}
 
-				const normalized = normalizeRewardGameRef(rawType);
+				const normalized = normalizeStoreItemPath(rawType);
 				const currentCount = ownedCounts.get(normalized) ?? 0;
 				ownedCounts.set(normalized, currentCount + count);
 			};
@@ -826,7 +836,7 @@ function AppMain() {
 				return 0;
 			}
 
-			const normalizedRewardName = normalizeRewardGameRef(rewardName);
+			const normalizedRewardName = normalizeStoreItemPath(rewardName);
 			const mappedSlug = dailyMarketSlugByRewardName[normalizedRewardName];
 			if (mappedSlug) {
 				return lookup.pricesBySlug[mappedSlug] ?? 0;
@@ -897,7 +907,7 @@ function AppMain() {
 
 			for (const [index, entry] of candidatesWithPositions.entries()) {
 				const candidate = entry.candidate;
-				let normalizedRewardName = normalizeRewardGameRef(candidate);
+				let normalizedRewardName = normalizeStoreItemPath(candidate);
 				let displayName =
 					scannerDisplayNameByRewardName[normalizedRewardName] || "";
 				let confidence = 1;
@@ -985,7 +995,7 @@ function AppMain() {
 							? (entry.displayIndex as 1 | 2 | 3 | 4)
 							: index >= 0 && index < 4
 								? ((index + 1) as 1 | 2 | 3 | 4)
-							: undefined,
+								: undefined,
 					platinum,
 					ducats,
 					confidence,
@@ -1131,9 +1141,7 @@ function AppMain() {
 
 			const selectedBaseName = getPathBaseName(selected).toLowerCase();
 			if (selectedBaseName !== EE_LOG_FILE_NAME) {
-				setEeLogPathPickerWarning(
-					"Please select the exact EE.log file.",
-				);
+				setEeLogPathPickerWarning("Please select the exact EE.log file.");
 				return;
 			}
 
@@ -1467,7 +1475,10 @@ function AppMain() {
 							300,
 							Math.floor(relicScannerAutoAdaptiveTimeoutMs),
 						),
-						autoDebounceMs: Math.max(100, Math.floor(relicScannerAutoDebounceMs)),
+						autoDebounceMs: Math.max(
+							100,
+							Math.floor(relicScannerAutoDebounceMs),
+						),
 					},
 				});
 				if (!isCancelled) {
@@ -1764,7 +1775,7 @@ function AppMain() {
 		let hasChanges = false;
 
 		for (const reward of scannerRewardLookup) {
-			const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+			const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 			const directPrice = getDailyMarketPriceForReward(normalizedRewardName);
 
 			if (nextValues[normalizedRewardName] !== directPrice) {
@@ -1933,16 +1944,10 @@ function AppMain() {
 			for (const miscItem of miscItems) {
 				const normalizedType = normalizeStoreItemPath(miscItem.ItemType);
 				const currentCount = ownedMiscCounts.get(normalizedType) ?? 0;
-				ownedMiscCounts.set(
-					normalizedType,
-					currentCount + miscItem.ItemCount,
-				);
+				ownedMiscCounts.set(normalizedType, currentCount + miscItem.ItemCount);
 			}
 
-			const manifestMap = new Map<string, string>();
-			for (const entry of manifest) {
-				manifestMap.set(entry.uniqueName, entry.textureLocation);
-			}
+			const manifestMap = buildManifestTextureLookup(manifest);
 
 			const recipeByUniqueName = new Map<
 				string,
@@ -1977,10 +1982,7 @@ function AppMain() {
 						companionNames[resultType] ||
 						resourceNames[resultType] ||
 						fallbackName;
-					const textureLocation = manifestMap.get(resultType) || "";
-					const imageUrl = textureLocation
-						? `http://content.warframe.com/PublicExport${textureLocation}`
-						: "";
+					const imageUrl = getImageUrlForUniqueName(resultType, manifestMap);
 
 					return {
 						itemType: entry.ItemType,
@@ -2015,13 +2017,13 @@ function AppMain() {
 					resourceNames[normalizedItemType] ||
 					normalizedItemType.split("/").pop() ||
 					"Part";
-				const partTexture =
-					manifestMap.get(normalizedItemType) || manifestMap.get(itemType) || "";
-				const partIcon = partTexture
-					? `http://content.warframe.com/PublicExport${partTexture}`
-					: "";
+				const partIcon = getImageUrlForUniqueName(
+					normalizedItemType || itemType,
+					manifestMap,
+				);
 				const blueprintType = getBlueprintTypeForIngredient(normalizedItemType);
-				const recipeForItem = recipeData[normalizedItemType] ?? recipeData[itemType];
+				const recipeForItem =
+					recipeData[normalizedItemType] ?? recipeData[itemType];
 				const hasRecipe =
 					ownedBlueprints.has(blueprintType) ||
 					(Boolean(recipeForItem) && ownedBlueprints.has(normalizedItemType));
@@ -2030,11 +2032,17 @@ function AppMain() {
 					pendingRecipeTypes.has(normalizedItemType);
 				const ownedMaterialCount =
 					(ownedMiscCounts.get(normalizedItemType) ?? 0) +
-					((recipeForItem ? 0 : ownedRecipeCounts.get(normalizedItemType) ?? 0));
+					(recipeForItem
+						? 0
+						: (ownedRecipeCounts.get(normalizedItemType) ?? 0));
 				const hasEnoughMaterials = ownedMaterialCount >= itemCount;
 
 				let requirements: WeaponCraftRequirement[] | undefined;
-				if (recipeForItem && depth < 6 && path.has(normalizedItemType) === false) {
+				if (
+					recipeForItem &&
+					depth < 6 &&
+					path.has(normalizedItemType) === false
+				) {
 					const nextPath = new Set(path);
 					nextPath.add(normalizedItemType);
 					requirements = recipeForItem.ingredients.map((ingredient) =>
@@ -2062,10 +2070,7 @@ function AppMain() {
 			const wfList: Warframe[] = Object.entries(warframeData).map(
 				([uniqueName, warframeInfo]) => {
 					const displayName = warframeInfo.name;
-					const textureLocation = manifestMap.get(uniqueName) || "";
-					const imageUrl = textureLocation
-						? `http://content.warframe.com/PublicExport${textureLocation}`
-						: "";
+					const imageUrl = getImageUrlForUniqueName(uniqueName, manifestMap);
 
 					const isOwned = ownedTypes.has(uniqueName);
 					const ownedData = ownedDetails.get(uniqueName);
@@ -2080,11 +2085,8 @@ function AppMain() {
 						? ownedBlueprints.has(mainRecipe.uniqueName)
 						: false;
 
-					const mainBlueprintTexture = mainRecipe
-						? manifestMap.get(mainRecipe.uniqueName) || ""
-						: "";
-					const mainBlueprintIcon = mainBlueprintTexture
-						? `http://content.warframe.com/PublicExport${mainBlueprintTexture}`
+					const mainBlueprintIcon = mainRecipe
+						? getImageUrlForUniqueName(mainRecipe.uniqueName, manifestMap)
 						: "";
 
 					parts = [
@@ -2137,20 +2139,17 @@ function AppMain() {
 			const allWeapons: OwnedWeapon[] = Object.entries(weaponData).map(
 				([uniqueName, weaponInfo]) => {
 					const ownedWeaponData = ownedWeaponDetails.get(uniqueName);
-					const weaponTextureLocation = manifestMap.get(uniqueName) || "";
-					const weaponImageUrl = weaponTextureLocation
-						? `http://content.warframe.com/PublicExport${weaponTextureLocation}`
-						: "";
+					const weaponImageUrl = getImageUrlForUniqueName(
+						uniqueName,
+						manifestMap,
+					);
 
 					const weaponRecipe = recipeData[uniqueName];
 					const hasMainBlueprint = weaponRecipe
 						? ownedBlueprints.has(weaponRecipe.uniqueName)
 						: false;
-					const mainBlueprintTexture = weaponRecipe
-						? manifestMap.get(weaponRecipe.uniqueName) || ""
-						: "";
-					const mainBlueprintIcon = mainBlueprintTexture
-						? `http://content.warframe.com/PublicExport${mainBlueprintTexture}`
+					const mainBlueprintIcon = weaponRecipe
+						? getImageUrlForUniqueName(weaponRecipe.uniqueName, manifestMap)
 						: "";
 
 					const requirements = weaponRecipe
@@ -2161,7 +2160,9 @@ function AppMain() {
 									count: 1,
 									owned: false,
 									hasRecipe: hasMainBlueprint,
-									isCraftingRecipe: pendingRecipeTypes.has(weaponRecipe.uniqueName),
+									isCraftingRecipe: pendingRecipeTypes.has(
+										weaponRecipe.uniqueName,
+									),
 									imageUrl: mainBlueprintIcon,
 								},
 								...weaponRecipe.ingredients.map((ingredient) =>
@@ -2195,10 +2196,10 @@ function AppMain() {
 				.filter(([, companionInfo]) => companionInfo.excludeFromCodex !== true)
 				.map(([uniqueName, companionInfo]) => {
 					const ownedCompanionData = ownedCompanionDetails.get(uniqueName);
-					const companionTextureLocation = manifestMap.get(uniqueName) || "";
-					const companionImageUrl = companionTextureLocation
-						? `http://content.warframe.com/PublicExport${companionTextureLocation}`
-						: "";
+					const companionImageUrl = getImageUrlForUniqueName(
+						uniqueName,
+						manifestMap,
+					);
 
 					const companionRecipe = recipeData[uniqueName];
 					const requirements =
@@ -2228,16 +2229,6 @@ function AppMain() {
 
 			allCompanions.sort((a, b) => a.displayName.localeCompare(b.displayName));
 			setAppCompanions(allCompanions);
-
-			console.log(
-				`Loaded ${wfList.length} warframes/archwings (${suits.length} warframes + ${spaceSuits.length} archwings owned)`,
-			);
-			console.log(
-				`Loaded ${allWeapons.length} weapons (${ownedWeaponDetails.size} owned in inventory categories)`,
-			);
-			console.log(
-				`Loaded ${allCompanions.length} companions (${ownedCompanionDetails.size} owned from Sentinels/KubrowPets)`,
-			);
 		},
 		[
 			warframeData,
@@ -2358,9 +2349,7 @@ function AppMain() {
 								onRelicScannerAutoDelayModeChange={
 									setAppRelicScannerAutoDelayMode
 								}
-								relicScannerAutoFixedDelayMs={
-									relicScannerAutoFixedDelayMs
-								}
+								relicScannerAutoFixedDelayMs={relicScannerAutoFixedDelayMs}
 								onRelicScannerAutoFixedDelayMsChange={(value) => {
 									setAppRelicScannerAutoFixedDelayMs(
 										Math.max(0, Math.floor(value)),
@@ -2394,9 +2383,7 @@ function AppMain() {
 								onRunRelicImageTest={runRelicImageTest}
 								relicTestLogSnippet={relicImageTestLogSnippet}
 								onRelicTestLogSnippetChange={setRelicImageTestLogSnippet}
-								relicTestForcedPlayerCount={
-									relicImageTestForcedPlayerCount
-								}
+								relicTestForcedPlayerCount={relicImageTestForcedPlayerCount}
 								onRelicTestForcedPlayerCountChange={
 									setRelicImageTestForcedPlayerCount
 								}

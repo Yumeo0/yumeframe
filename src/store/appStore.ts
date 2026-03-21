@@ -56,6 +56,8 @@ export interface AppState {
 	relicScannerStatus: "stopped" | "watching" | "error";
 	relicScans: RelicScanEntry[];
 	primeResurgenceItemTypes: string[];
+	upgradeNames: Record<string, string>;
+	manifestTextureLocations: Record<string, string>;
 }
 
 export const appStore = new Store<AppState>({
@@ -88,6 +90,8 @@ export const appStore = new Store<AppState>({
 	relicScannerStatus: "stopped",
 	relicScans: [],
 	primeResurgenceItemTypes: [],
+	upgradeNames: {},
+	manifestTextureLocations: {},
 });
 
 function updateStoreSlice<Key extends keyof AppState>(
@@ -228,4 +232,14 @@ export function setAppRelicScans(value: Updater<RelicScanEntry[]>) {
 
 export function setAppPrimeResurgenceItemTypes(value: string[]) {
 	updateStoreSlice("primeResurgenceItemTypes", value);
+}
+
+export function setAppUpgradeNames(value: Updater<Record<string, string>>) {
+	updateStoreSlice("upgradeNames", value);
+}
+
+export function setAppManifestTextureLocations(
+	value: Updater<Record<string, string>>,
+) {
+	updateStoreSlice("manifestTextureLocations", value);
 }

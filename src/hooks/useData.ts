@@ -8,6 +8,7 @@ import type {
 	ExportRecipesWrapper,
 	ExportRelicArcaneWrapper,
 	ExportResourcesWrapper,
+	ExportUpgradesWrapper,
 	ExportWarframeEntry,
 	ExportWarframesWrapper,
 	ExportWeaponEntry,
@@ -34,6 +35,7 @@ export function useData() {
 		Record<string, number>
 	>({});
 	const [resourceNames, setResourceNames] = useState<Record<string, string>>({});
+	const [upgradeNames, setUpgradeNames] = useState<Record<string, string>>({});
 	const [indexLoading, setIndexLoading] = useState(true);
 	const [error, setError] = useState("");
 
@@ -43,7 +45,6 @@ export function useData() {
 		try {
 			const result = await invoke<AssetEntry[]>("fetch_warframe_index");
 			setAssets(result);
-			console.log(`Loaded ${result.length} asset entries`);
 		} catch (err) {
 			setError(`Failed to load asset index: ${err}`);
 			console.error(err);
@@ -97,6 +98,7 @@ export function useData() {
 				invoke<string>("fetch_recipe_data", { assets }),
 				invoke<string>("fetch_relic_data", { assets }),
 				invoke<string>("fetch_resource_data", { assets }),
+				invoke<string>("fetch_upgrade_data", { assets }),
 			]);
 
 			if (cancelled) {
@@ -111,6 +113,7 @@ export function useData() {
 				recipeResult,
 				relicResult,
 				resourceResult,
+				upgradeResult,
 			] = results;
 
 			if (manifestResult.status === "fulfilled") {
@@ -248,6 +251,17 @@ export function useData() {
 			} else {
 				console.error("Failed to load resource data:", resourceResult.reason);
 			}
+
+			if (upgradeResult.status === "fulfilled") {
+				const data: ExportUpgradesWrapper = JSON.parse(upgradeResult.value);
+				const names: Record<string, string> = {};
+				for (const upgrade of data.ExportUpgrades || []) {
+					names[upgrade.uniqueName] = upgrade.name;
+				}
+				setUpgradeNames(names);
+			} else {
+				console.error("Failed to load upgrade data:", upgradeResult.reason);
+			}
 		}
 
 		loadData();
@@ -270,6 +284,7 @@ export function useData() {
 		recipeData,
 		recipeDucatValues,
 		resourceNames,
+		upgradeNames,
 		indexLoading,
 		error,
 	};

@@ -455,6 +455,10 @@ export interface Upgrade {
 	levelStats?: LevelStat[];
 }
 
+export interface ExportUpgradesWrapper {
+	ExportUpgrades: Upgrade[];
+}
+
 // Riven Mods
 
 export interface RivenUpgradeValue {

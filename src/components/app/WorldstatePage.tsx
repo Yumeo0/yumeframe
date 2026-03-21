@@ -19,6 +19,11 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatDateTime } from "@/lib/datetime.utils";
+import {
+	getImageUrlForUniqueName,
+	normalizeLookupName,
+	normalizeStoreItemPath,
+} from "@/lib/warframe.utils";
 import { appStore, setAppPrimeResurgenceItemTypes } from "@/store/appStore";
 
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
@@ -123,19 +128,6 @@ function getTierSortValue(label: string): number {
 	return rank[label] ?? 99;
 }
 
-function normalizeLookupName(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/<archwing>\s*/g, "")
-		.replace(/["'`’]/g, "")
-		.replace(/[^a-z0-9]+/g, " ")
-		.trim();
-}
-
-function normalizeStoreItemPath(value: string): string {
-	return value.replace("/StoreItems", "");
-}
-
 function getCircuitCategoryLabel(category: string): string {
 	const normalized = category.toUpperCase();
 	if (normalized === "EXC_NORMAL") {
@@ -192,7 +184,11 @@ function resolveNodeLabel(rawValue: string, resolvedValue: string, regionName?: 
 export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 	const warframes = useStore(appStore, (state) => state.warframes);
 	const weapons = useStore(appStore, (state) => state.weapons);
-	const companions = useStore(appStore, (state) => state.companions);
+	const upgradeNames = useStore(appStore, (state) => state.upgradeNames);
+	const manifestTextureLocations = useStore(
+		appStore,
+		(state) => state.manifestTextureLocations,
+	);
 	const [worldstate, setWorldstate] = useState<ParsedWorldstate | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
@@ -217,7 +213,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			setError(null);
 			setAppPrimeResurgenceItemTypes(
 				parsed.vaultTrader.inventory.map((item) =>
-					item.uniqueName.replace("/StoreItems", ""),
+					normalizeStoreItemPath(item.uniqueName),
 				),
 			);
 		} catch (err) {
@@ -395,17 +391,8 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			iconByName.set(normalizeLookupName(weapon.name), weapon.imageUrl);
 		}
 
-		for (const companion of companions) {
-			if (!companion.imageUrl) {
-				continue;
-			}
-
-			iconByName.set(normalizeLookupName(companion.displayName), companion.imageUrl);
-			iconByName.set(normalizeLookupName(companion.name), companion.imageUrl);
-		}
-
 		return iconByName;
-	}, [companions, warframes, weapons]);
+	}, [warframes, weapons]);
 
 	const primeResurgenceIconByName = useMemo(() => {
 		const iconByName = new Map<string, string>();
@@ -427,16 +414,8 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			}
 		}
 
-		for (const companion of companions) {
-			if (companion.imageUrl) {
-				iconByName.set(normalizeLookupName(companion.displayName), companion.imageUrl);
-				iconByName.set(normalizeLookupName(companion.name), companion.imageUrl);
-				iconByItemType.set(normalizeStoreItemPath(companion.type), companion.imageUrl);
-			}
-		}
-
 		return { iconByName, iconByItemType };
-	}, [companions, warframes, weapons]);
+	}, [warframes, weapons]);
 
 	const primeResurgenceClassifiers = useMemo(() => {
 		const warframeNames = new Set<string>();
@@ -485,11 +464,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			const mapped = normalizedType
 				? primeResurgenceDisplayNameByType.get(normalizedType)
 				: undefined;
-			if (mapped) {
-				return mapped;
-			}
-
-			return itemName;
+			return mapped || itemName;
 		},
 		[primeResurgenceDisplayNameByType],
 	);
@@ -497,6 +472,14 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 	const getPrimeResurgenceIcon = useCallback(
 		(itemName: string, itemType: string) => {
 			const normalizedItemType = normalizeStoreItemPath(itemType || "");
+			const manifestImageUrl = getImageUrlForUniqueName(
+				itemType || normalizedItemType,
+				manifestTextureLocations,
+			);
+			if (manifestImageUrl) {
+				return manifestImageUrl;
+			}
+
 			const byType = normalizedItemType
 				? primeResurgenceIconByName.iconByItemType.get(normalizedItemType)
 				: undefined;
@@ -513,20 +496,22 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			if (normalized.includes("prime") && normalized.includes("relic")) {
 				return "/icons/icon_relic.svg";
 			}
-			if (
-				normalized.includes("armor") ||
-				normalized.includes("syandana") ||
-				normalized.includes("sigil") ||
-				normalized.includes("skin") ||
-				normalized.includes("glyph") ||
-				normalized.includes("bobble")
-			) {
-				return "/icons/icon_appearance.svg";
-			}
 
 			return "/icons/icon_foundry.svg";
 		},
-		[primeResurgenceIconByName],
+		[manifestTextureLocations, primeResurgenceIconByName],
+	);
+
+	const resolveInventoryDisplayName = useCallback(
+		(itemName: string, itemType: string) => {
+			const normalizedItemType = normalizeStoreItemPath(itemType || "");
+			const modName =
+				(itemType ? upgradeNames[itemType] : undefined) ||
+				(normalizedItemType ? upgradeNames[normalizedItemType] : undefined);
+
+			return modName || resolvePrimeResurgenceItemName(itemName, itemType);
+		},
+		[resolvePrimeResurgenceItemName, upgradeNames],
 	);
 
 	const getFissureTierIcon = useCallback((tier: string) => {
@@ -600,6 +585,47 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 			weapons: weaponsSection,
 		};
 	}, [primeResurgenceClassifiers, resolvePrimeResurgenceItemName, worldstate]);
+
+	const baroInventoryDisplay = useMemo(() => {
+		if (!baroTrader) {
+			return [] as Array<
+				NonNullable<ParsedWorldstate["voidTrader"]>["inventory"][number] & {
+					displayItem: string;
+					icon: string;
+				}
+			>;
+		}
+
+		return baroTrader.inventory
+			.map((item) => {
+				const displayItem = resolveInventoryDisplayName(item.item, item.uniqueName);
+				return {
+					...item,
+					displayItem,
+					icon: getPrimeResurgenceIcon(displayItem, item.uniqueName),
+				};
+			})
+			.filter((item) => {
+				const normalizedName = normalizeLookupName(item.displayItem);
+				const normalizedType = normalizeStoreItemPath(item.uniqueName);
+				const isWeapon =
+					primeResurgenceClassifiers.weaponNames.has(normalizedName) ||
+					(normalizedType.length > 0 &&
+						primeResurgenceClassifiers.weaponTypes.has(normalizedType));
+				const isMod =
+					Boolean(upgradeNames[item.uniqueName]) ||
+					(normalizedType.length > 0 && Boolean(upgradeNames[normalizedType]));
+
+				return isWeapon || isMod;
+			})
+			.sort((a, b) => a.displayItem.localeCompare(b.displayItem));
+	}, [
+		baroTrader,
+		getPrimeResurgenceIcon,
+		primeResurgenceClassifiers,
+		resolveInventoryDisplayName,
+		upgradeNames,
+	]);
 
 	if (loading) {
 		return (
@@ -688,20 +714,47 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 					</CardHeader>
 					{baroTrader ? (
 						<CardContent className="px-4">
-							<div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-3">
-								{baroTrader.inventory.map((item) => (
-									<div
-										key={item.uniqueName}
-										className="flex items-center justify-between gap-1.5 px-2 py-1 border rounded-md"
-									>
-										<p className="text-xs font-medium truncate">{item.item}</p>
-										<div className="flex items-center gap-1 shrink-0">
-											<Badge variant="outline" className="text-[10px] px-1 py-0">{item.ducats}d</Badge>
-											<Badge variant="outline" className="text-[10px] px-1 py-0">{item.credits}cr</Badge>
+							{baroInventoryDisplay.length === 0 ? (
+								<p className="text-xs text-muted-foreground">
+									No weapon or mod items available.
+								</p>
+							) : (
+								<div className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-3">
+									{baroInventoryDisplay.map((item) => (
+										<div
+											key={item.uniqueName}
+											className="flex items-center justify-between gap-1.5 px-2 py-1 border rounded-md"
+										>
+											<div className="flex items-center gap-1.5 min-w-0">
+												<img
+													alt={item.displayItem}
+													className="object-contain rounded-sm size-5"
+													src={item.icon}
+												/>
+												<p className="text-xs font-medium truncate">{item.displayItem}</p>
+											</div>
+											<div className="flex items-center gap-1 shrink-0">
+												<Badge variant="outline" className="text-[10px] px-1 py-0 gap-1">
+													<img
+														alt="Ducats"
+														className="object-contain size-3"
+														src="/OrokinDucats.png"
+													/>
+													{item.ducats}
+												</Badge>
+												<Badge variant="outline" className="text-[10px] px-1 py-0 gap-1">
+													<img
+														alt="Credits"
+														className="object-contain size-3"
+														src="/Credits.png"
+													/>
+													{item.credits}
+												</Badge>
+											</div>
 										</div>
-									</div>
-								))}
-							</div>
+									))}
+								</div>
+							)}
 						</CardContent>
 					) : null}
 				</Card>
@@ -866,9 +919,9 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 							) : (
 								<div className="space-y-2">
 									{primeResurgenceSections.warframes.length > 0 && (
-										<div>
+										<div className="p-2 border rounded-md">
 											<div className="flex items-center justify-between mb-1">
-												<p className="text-xs font-medium text-muted-foreground">Warframes</p>
+												<p className="text-sm font-medium">Warframes</p>
 												<Badge variant="outline" className="text-[10px] px-1.5 py-0">{primeResurgenceSections.warframes.length}</Badge>
 											</div>
 											<div className="grid grid-cols-2 gap-1">
@@ -889,9 +942,9 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 										</div>
 									)}
 									{primeResurgenceSections.weapons.length > 0 && (
-										<div>
+										<div className="p-2 border rounded-md">
 											<div className="flex items-center justify-between mb-1">
-												<p className="text-xs font-medium text-muted-foreground">Weapons</p>
+												<p className="text-sm font-medium">Weapons</p>
 												<Badge variant="outline" className="text-[10px] px-1.5 py-0">{primeResurgenceSections.weapons.length}</Badge>
 											</div>
 											<div className="grid grid-cols-2 gap-1">

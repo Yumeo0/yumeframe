@@ -105,6 +105,34 @@ export interface MasterySummary {
 	pointsRemainingForNextRank: number;
 }
 
+export function isWarframeMastered(xp: number, maxLevel: number): boolean {
+	const cappedLevel = maxLevel > 30 ? 40 : 30;
+	const required = 1000 * cappedLevel ** 2;
+	return xp >= required;
+}
+
+export function isWeaponMastered(
+	xp: number,
+	maxLevelCap: number | undefined,
+	uniqueName: string,
+): boolean {
+	const lowerUniqueName = uniqueName.toLowerCase();
+	const hasExtendedCap =
+		(maxLevelCap ?? 30) > 30 ||
+		lowerUniqueName.includes("kuva") ||
+		lowerUniqueName.includes("tenet") ||
+		lowerUniqueName.includes("coda") ||
+		lowerUniqueName.includes("paracesis");
+	const cappedLevel = hasExtendedCap ? 40 : 30;
+	const required = (1000 * cappedLevel ** 2) / 2;
+	return xp >= required;
+}
+
+export function isCompanionMastered(xp: number): boolean {
+	const required = 1000 * 30 ** 2;
+	return xp >= required;
+}
+
 function getRankFromAffinity(
 	affinity: number,
 	masteryPerLevel: number,

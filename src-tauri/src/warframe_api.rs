@@ -812,100 +812,62 @@ async fn download_and_cache_asset(
     Ok(content)
 }
 
+async fn fetch_export_data(
+    app: AppHandle,
+    assets: Vec<AssetEntry>,
+    filename: &str,
+) -> Result<String, String> {
+    let app_handle = app;
+    let asset = assets
+        .iter()
+        .find(|e| e.filename == filename)
+        .ok_or_else(|| format!("{} not found in asset list", filename))?;
+
+    let content = download_and_cache_asset(&app_handle, filename, &asset.hash).await?;
+    println!("Fetched {}", filename);
+    Ok(content)
+}
+
 /// Fetch warframe data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_warframe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let warframe_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportWarframes_en.json")
-        .ok_or("ExportWarframes_en.json not found in asset list")?;
-
-    let content =
-        download_and_cache_asset(&app_handle, "ExportWarframes_en.json", &warframe_asset.hash)
-            .await?;
-    println!("Fetched ExportWarframes_en.json");
-    Ok(content)
+    fetch_export_data(app, assets, "ExportWarframes_en.json").await
 }
 
 /// Fetch weapon data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_weapon_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let weapon_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportWeapons_en.json")
-        .ok_or("ExportWeapons_en.json not found in asset list")?;
-
-    let content =
-        download_and_cache_asset(&app_handle, "ExportWeapons_en.json", &weapon_asset.hash)
-            .await?;
-    println!("Fetched ExportWeapons_en.json");
-    Ok(content)
+    fetch_export_data(app, assets, "ExportWeapons_en.json").await
 }
 
 /// Fetch recipe data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_recipe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let recipe_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportRecipes_en.json")
-        .ok_or("ExportRecipes_en.json not found in asset list")?;
-
-    let content =
-        download_and_cache_asset(&app_handle, "ExportRecipes_en.json", &recipe_asset.hash)
-            .await?;
-    println!("Fetched ExportRecipes_en.json");
-    Ok(content)
+    fetch_export_data(app, assets, "ExportRecipes_en.json").await
 }
 
 /// Fetch resource data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_resource_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let resource_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportResources_en.json")
-        .ok_or("ExportResources_en.json not found in asset list")?;
-
-    let content =
-        download_and_cache_asset(&app_handle, "ExportResources_en.json", &resource_asset.hash)
-            .await?;
-    println!("Fetched ExportResources_en.json");
-    Ok(content)
+    fetch_export_data(app, assets, "ExportResources_en.json").await
 }
 
 /// Fetch companion data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_companion_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let companion_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportSentinels_en.json")
-        .ok_or("ExportSentinels_en.json not found in asset list")?;
-
-    let content =
-        download_and_cache_asset(&app_handle, "ExportSentinels_en.json", &companion_asset.hash)
-            .await?;
-    println!("Fetched ExportSentinels_en.json");
-    Ok(content)
+    fetch_export_data(app, assets, "ExportSentinels_en.json").await
 }
 
 /// Fetch relic data - returns raw JSON for frontend parsing
 #[tauri::command]
 pub async fn fetch_relic_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
-    let app_handle = app;
-    let relic_asset = assets
-        .iter()
-        .find(|e| e.filename == "ExportRelicArcane_en.json")
-        .ok_or("ExportRelicArcane_en.json not found in asset list")?;
+    fetch_export_data(app, assets, "ExportRelicArcane_en.json").await
+}
 
-    let content =
-        download_and_cache_asset(&app_handle, "ExportRelicArcane_en.json", &relic_asset.hash)
-            .await?;
-    println!("Fetched ExportRelicArcane_en.json");
-    Ok(content)
+/// Fetch upgrade/mod data - returns raw JSON for frontend parsing
+#[tauri::command]
+pub async fn fetch_upgrade_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    fetch_export_data(app, assets, "ExportUpgrades_en.json").await
 }
 
 #[cfg(test)]

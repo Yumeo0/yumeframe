@@ -10,7 +10,17 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	isCompanionMastered,
+	isWarframeMastered,
+	isWeaponMastered,
+} from "@/lib/mastery.utils";
 import { calculateExpectedDucats, calculateExpectedPlatinum } from "@/lib/relics.utils";
+import {
+	normalizeMarketName,
+	normalizeStoreItemPath,
+	slugifyMarketName,
+} from "@/lib/warframe.utils";
 import { appStore } from "@/store/appStore";
 import type { OwnedRelic, OwnedRelicReward } from "@/types";
 
@@ -52,22 +62,6 @@ interface DailyMarketVaultLookup {
 	vaultedBySlug: Record<string, boolean>;
 	vaultedByName: Record<string, boolean>;
 	slugByName: Record<string, string>;
-}
-
-function normalizeRewardGameRef(gameRef: string): string {
-	return gameRef.replace("/StoreItems", "");
-}
-
-function normalizeMarketName(value: string): string {
-	return value
-		.toLowerCase()
-		.replace(/['’]/g, "")
-		.replace(/[^a-z0-9]+/g, " ")
-		.trim();
-}
-
-function slugifyMarketName(value: string): string {
-	return normalizeMarketName(value).replace(/\s+/g, "_");
 }
 
 function getSingleRollRewardProbabilities(
@@ -128,34 +122,6 @@ function expectedBestOfN(values: number[], probabilities: number[], picks: numbe
 	return Math.round(expected * 100) / 100;
 }
 
-function isWarframeMastered(xp: number, maxLevel: number): boolean {
-	const cappedLevel = maxLevel > 30 ? 40 : 30;
-	const required = 1000 * cappedLevel ** 2;
-	return xp >= required;
-}
-
-function isWeaponMastered(
-	xp: number,
-	maxLevelCap: number | undefined,
-	uniqueName: string,
-): boolean {
-	const lowerUniqueName = uniqueName.toLowerCase();
-	const hasExtendedCap =
-		(maxLevelCap ?? 30) > 30 ||
-		lowerUniqueName.includes("kuva") ||
-		lowerUniqueName.includes("tenet") ||
-		lowerUniqueName.includes("coda") ||
-		lowerUniqueName.includes("paracesis");
-	const cappedLevel = hasExtendedCap ? 40 : 30;
-	const required = (1000 * cappedLevel ** 2) / 2;
-	return xp >= required;
-}
-
-function isCompanionMastered(xp: number): boolean {
-	const required = 1000 * 30 ** 2;
-	return xp >= required;
-}
-
 function isRelicVaultedFromDailyCache(
 	relicName: string,
 	vaultLookup: DailyMarketVaultLookup,
@@ -210,7 +176,7 @@ export function RelicPlannerPage() {
 					return;
 				}
 
-				const normalized = normalizeRewardGameRef(rawType);
+				const normalized = normalizeStoreItemPath(rawType);
 				ownedCounts.set(normalized, (ownedCounts.get(normalized) ?? 0) + count);
 			};
 
@@ -260,14 +226,14 @@ export function RelicPlannerPage() {
 		const set = new Set<string>();
 
 		for (const warframe of warframes) {
-			const normalizedType = normalizeRewardGameRef(warframe.type);
+			const normalizedType = normalizeStoreItemPath(warframe.type);
 			if (warframe.owned || isWarframeMastered(warframe.xp, warframe.maxLevel)) {
 				set.add(normalizedType);
 			}
 		}
 
 		for (const weapon of weapons) {
-			const normalizedType = normalizeRewardGameRef(weapon.type);
+			const normalizedType = normalizeStoreItemPath(weapon.type);
 			if (
 				weapon.owned ||
 				isWeaponMastered(weapon.xp, weapon.maxLevelCap, weapon.uniqueName)
@@ -277,7 +243,7 @@ export function RelicPlannerPage() {
 		}
 
 		for (const companion of companions) {
-			const normalizedType = normalizeRewardGameRef(companion.type);
+			const normalizedType = normalizeStoreItemPath(companion.type);
 			if (companion.owned || isCompanionMastered(companion.xp)) {
 				set.add(normalizedType);
 			}
@@ -320,7 +286,7 @@ export function RelicPlannerPage() {
 				dailyMarketVaultLookup,
 			);
 			for (const reward of relic.relicRewards) {
-				const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+				const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 				const current = byRewardName.get(normalizedRewardName) ?? {
 					total: 0,
 					vaulted: 0,
@@ -370,12 +336,12 @@ export function RelicPlannerPage() {
 					: 0;
 
 				const allRewardsOwned = relic.relicRewards.every((reward) => {
-					const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 					return (ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0;
 				});
 
 				const allItemsMasteredOrOwned = relic.relicRewards.every((reward) => {
-					const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 					if ((ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0) {
 						return true;
 					}
@@ -383,7 +349,7 @@ export function RelicPlannerPage() {
 				});
 
 				const missingItemsCount = relic.relicRewards.filter((reward) => {
-					const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 					if ((ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0) {
 						return false;
 					}
@@ -710,7 +676,7 @@ export function RelicPlannerPage() {
 														key={`${relic.uniqueName}-${reward.rewardName}`}
 														className={`relative rounded border p-1 ${rewardRarityClasses(reward.rarity)}`}
 																		title={`${reward.rewardName.split("/").pop() || reward.rewardName} (${reward.rarity})${reward.itemCount > 1 ? ` x${reward.itemCount}` : ""}${reward.ducats > 0 ? ` • ${reward.ducats} ducats` : ""}${reward.platinum > 0 ? ` • ${reward.platinum} platinum` : ""}${(() => {
-																			const normalizedRewardName = normalizeRewardGameRef(reward.rewardName);
+																			const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
 																			const rewardState = rewardVaultState.get(normalizedRewardName);
 																			if (!rewardState || rewardState.total === 0) {
 																				return "";
