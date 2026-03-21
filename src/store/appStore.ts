@@ -30,6 +30,9 @@ export interface AppState {
 	activeTab: AppTab;
 	foundryFilter: FoundryFilter;
 	use24HourClock: boolean;
+	craftingTreeShowRecipeDebugNames: boolean;
+	craftingTreeAutoCollapseAllParts: boolean;
+	starredFoundryItemKeys: string[];
 	inventoryAutoRefreshEnabled: boolean;
 	inventoryAutoRefreshIntervalSeconds: number;
 	inventoryLastRefreshAt: number | null;
@@ -64,6 +67,9 @@ export const appStore = new Store<AppState>({
 	activeTab: "foundry",
 	foundryFilter: "warframes",
 	use24HourClock: false,
+	craftingTreeShowRecipeDebugNames: false,
+	craftingTreeAutoCollapseAllParts: false,
+	starredFoundryItemKeys: [],
 	inventoryAutoRefreshEnabled: false,
 	inventoryAutoRefreshIntervalSeconds: 180,
 	inventoryLastRefreshAt: null,
@@ -114,6 +120,22 @@ export function setAppFoundryFilter(value: FoundryFilter) {
 
 export function setAppUse24HourClock(value: Updater<boolean>) {
 	updateStoreSlice("use24HourClock", value);
+}
+
+export function setAppCraftingTreeShowRecipeDebugNames(
+	value: Updater<boolean>,
+) {
+	updateStoreSlice("craftingTreeShowRecipeDebugNames", value);
+}
+
+export function setAppCraftingTreeAutoCollapseAllParts(
+	value: Updater<boolean>,
+) {
+	updateStoreSlice("craftingTreeAutoCollapseAllParts", value);
+}
+
+export function setAppStarredFoundryItemKeys(value: Updater<string[]>) {
+	updateStoreSlice("starredFoundryItemKeys", value);
 }
 
 export function setAppInventoryAutoRefreshEnabled(value: Updater<boolean>) {

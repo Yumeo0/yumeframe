@@ -30,6 +30,7 @@ import {
 	buildManifestTextureLookup,
 	getDataForUniqueName,
 	getImageUrlForUniqueName,
+	normalizeLookupName,
 	normalizeMarketName,
 	normalizeStoreItemPath,
 	slugifyMarketName,
@@ -38,6 +39,8 @@ import {
 	appStore,
 	setAppActiveTab,
 	setAppCompanions,
+	setAppCraftingTreeAutoCollapseAllParts,
+	setAppCraftingTreeShowRecipeDebugNames,
 	setAppEeLogPath,
 	setAppInventoryAutoRefreshEnabled,
 	setAppInventoryAutoRefreshIntervalSeconds,
@@ -57,6 +60,7 @@ import {
 	setAppRelics,
 	setAppRewardPlatinumFetchedAt,
 	setAppRewardPlatinumValues,
+	setAppStarredFoundryItemKeys,
 	setAppUpgradeNames,
 	setAppUse24HourClock,
 	setAppWarframes,
@@ -130,6 +134,20 @@ function normalizeEeLogPath(path: string): string {
 			? "\\"
 			: "/";
 	return `${withoutTrailingSeparators}${joiner}EE.log`;
+}
+
+function toBlueprintDisplayName(value: string): string {
+	const normalized = normalizeLookupName(value)
+		.replace(/\s+blueprint$/i, "")
+		.trim();
+	if (!normalized) {
+		return "Blueprint";
+	}
+
+	const titleCased = normalized.replace(/\b\w/g, (match) =>
+		match.toUpperCase(),
+	);
+	return `${titleCased} Blueprint`;
 }
 
 interface MarketTopOrders {
@@ -524,6 +542,18 @@ function AppMain() {
 		(state) => state.inventoryAutoRefreshEnabled,
 	);
 	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
+	const craftingTreeShowRecipeDebugNames = useStore(
+		appStore,
+		(state) => state.craftingTreeShowRecipeDebugNames,
+	);
+	const craftingTreeAutoCollapseAllParts = useStore(
+		appStore,
+		(state) => state.craftingTreeAutoCollapseAllParts,
+	);
+	const starredFoundryItemKeys = useStore(
+		appStore,
+		(state) => state.starredFoundryItemKeys,
+	);
 	const inventoryAutoRefreshIntervalSeconds = useStore(
 		appStore,
 		(state) => state.inventoryAutoRefreshIntervalSeconds,
@@ -581,7 +611,9 @@ function AppMain() {
 			const isBlueprint = /blueprint/i.test(normalizedRecipeName);
 			recipeDisplayNameByUniqueName.set(
 				normalizedRecipeName,
-				isBlueprint ? `${resultDisplayName} Blueprint` : resultDisplayName,
+				isBlueprint
+					? toBlueprintDisplayName(resultDisplayName)
+					: resultDisplayName,
 			);
 		}
 
@@ -810,7 +842,7 @@ function AppMain() {
 		for (const entry of scannerRewardLookup) {
 			const candidateNames = new Set<string>([entry.displayName]);
 			if (!/\bblueprint$/i.test(entry.displayName)) {
-				candidateNames.add(`${entry.displayName} Blueprint`);
+				candidateNames.add(toBlueprintDisplayName(entry.displayName));
 			}
 
 			for (const name of candidateNames) {
@@ -1191,6 +1223,9 @@ function AppMain() {
 			if (rawScannerSettings) {
 				const parsed = JSON.parse(rawScannerSettings) as {
 					use24HourClock?: boolean;
+					craftingTreeShowRecipeDebugNames?: boolean;
+					craftingTreeAutoCollapseAllParts?: boolean;
+					starredFoundryItemKeys?: string[];
 					relicScannerEnabled?: boolean;
 					relicOverlayEnabled?: boolean;
 					relicScannerHotkey?: string;
@@ -1204,6 +1239,23 @@ function AppMain() {
 				};
 				if (typeof parsed.use24HourClock === "boolean") {
 					setAppUse24HourClock(parsed.use24HourClock);
+				}
+				if (typeof parsed.craftingTreeShowRecipeDebugNames === "boolean") {
+					setAppCraftingTreeShowRecipeDebugNames(
+						parsed.craftingTreeShowRecipeDebugNames,
+					);
+				}
+				if (typeof parsed.craftingTreeAutoCollapseAllParts === "boolean") {
+					setAppCraftingTreeAutoCollapseAllParts(
+						parsed.craftingTreeAutoCollapseAllParts,
+					);
+				}
+				if (Array.isArray(parsed.starredFoundryItemKeys)) {
+					setAppStarredFoundryItemKeys(
+						parsed.starredFoundryItemKeys.filter(
+							(value): value is string => typeof value === "string",
+						),
+					);
 				}
 				if (typeof parsed.relicScannerEnabled === "boolean") {
 					setAppRelicScannerEnabled(parsed.relicScannerEnabled);
@@ -1283,6 +1335,9 @@ function AppMain() {
 				RELIC_SCANNER_SETTINGS_CACHE_KEY,
 				JSON.stringify({
 					use24HourClock,
+					craftingTreeShowRecipeDebugNames,
+					craftingTreeAutoCollapseAllParts,
+					starredFoundryItemKeys,
 					relicScannerEnabled,
 					relicOverlayEnabled,
 					relicScannerHotkey: normalizedRelicScannerHotkey,
@@ -1300,6 +1355,9 @@ function AppMain() {
 		}
 	}, [
 		use24HourClock,
+		craftingTreeShowRecipeDebugNames,
+		craftingTreeAutoCollapseAllParts,
+		starredFoundryItemKeys,
 		relicOverlayEnabled,
 		relicScannerEnabled,
 		normalizedRelicScannerHotkey,
@@ -2059,14 +2117,28 @@ function AppMain() {
 				) {
 					const nextPath = new Set(path);
 					nextPath.add(normalizedItemType);
-					requirements = recipeForItem.ingredients.map((ingredient) =>
-						buildRequirementTree(
-							ingredient.ItemType,
-							ingredient.ItemCount,
-							depth + 1,
-							nextPath,
+					requirements = [
+						{
+							name: toBlueprintDisplayName(partName),
+							itemType: recipeForItem.uniqueName,
+							count: 1,
+							owned: false,
+							hasRecipe: ownedBlueprints.has(recipeForItem.uniqueName),
+							isCraftingRecipe: pendingRecipeTypes.has(recipeForItem.uniqueName),
+							imageUrl: getImageUrlForUniqueName(
+								recipeForItem.uniqueName,
+								manifestMap,
+							),
+						},
+						...recipeForItem.ingredients.map((ingredient) =>
+							buildRequirementTree(
+								ingredient.ItemType,
+								ingredient.ItemCount,
+								depth + 1,
+								nextPath,
+							),
 						),
-					);
+					];
 				}
 
 				return {
@@ -2105,7 +2177,7 @@ function AppMain() {
 
 					parts = [
 						{
-							name: "Blueprint",
+							name: toBlueprintDisplayName(displayName),
 							itemType: mainRecipe?.uniqueName,
 							owned: false,
 							hasRecipe: hasMainBlueprint,
@@ -2169,7 +2241,7 @@ function AppMain() {
 					const requirements = weaponRecipe
 						? [
 								{
-									name: "Blueprint",
+									name: toBlueprintDisplayName(weaponInfo.name),
 									itemType: weaponRecipe.uniqueName,
 									count: 1,
 									owned: false,
@@ -2330,6 +2402,18 @@ function AppMain() {
 								activeSection={activeSettingsSection}
 								use24HourClock={use24HourClock}
 								onUse24HourClockChange={setAppUse24HourClock}
+								craftingTreeShowRecipeDebugNames={
+									craftingTreeShowRecipeDebugNames
+								}
+								onCraftingTreeShowRecipeDebugNamesChange={
+									setAppCraftingTreeShowRecipeDebugNames
+								}
+								craftingTreeAutoCollapseAllParts={
+									craftingTreeAutoCollapseAllParts
+								}
+								onCraftingTreeAutoCollapseAllPartsChange={
+									setAppCraftingTreeAutoCollapseAllParts
+								}
 								inventoryAutoRefreshEnabled={inventoryAutoRefreshEnabled}
 								onInventoryAutoRefreshEnabledChange={
 									setAppInventoryAutoRefreshEnabled

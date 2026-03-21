@@ -24,6 +24,10 @@ interface SettingsPageProps {
 	activeSection: SettingsSection;
 	use24HourClock: boolean;
 	onUse24HourClockChange: (value: boolean) => void;
+	craftingTreeShowRecipeDebugNames: boolean;
+	onCraftingTreeShowRecipeDebugNamesChange: (value: boolean) => void;
+	craftingTreeAutoCollapseAllParts: boolean;
+	onCraftingTreeAutoCollapseAllPartsChange: (value: boolean) => void;
 	inventoryAutoRefreshEnabled: boolean;
 	onInventoryAutoRefreshEnabledChange: (value: boolean) => void;
 	inventoryAutoRefreshIntervalSeconds: number;
@@ -79,6 +83,10 @@ export function SettingsPage({
 	activeSection,
 	use24HourClock,
 	onUse24HourClockChange,
+	craftingTreeShowRecipeDebugNames,
+	onCraftingTreeShowRecipeDebugNamesChange,
+	craftingTreeAutoCollapseAllParts,
+	onCraftingTreeAutoCollapseAllPartsChange,
 	inventoryAutoRefreshEnabled,
 	onInventoryAutoRefreshEnabledChange,
 	inventoryAutoRefreshIntervalSeconds,
@@ -151,6 +159,21 @@ export function SettingsPage({
 								checked={use24HourClock}
 								onChange={(event) =>
 									onUse24HourClockChange(event.target.checked)
+								}
+							/>
+						</label>
+						<label className="flex items-center justify-between p-3 border rounded">
+							<div>
+								<p className="text-sm font-medium">Auto-collapse all crafting parts</p>
+								<p className="text-xs text-muted-foreground">
+									When opening a tree, collapse all subrecipes by default.
+								</p>
+							</div>
+							<input
+								type="checkbox"
+								checked={craftingTreeAutoCollapseAllParts}
+								onChange={(event) =>
+									onCraftingTreeAutoCollapseAllPartsChange(event.target.checked)
 								}
 							/>
 						</label>
@@ -482,6 +505,22 @@ export function SettingsPage({
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
+						<label className="flex items-center justify-between p-3 border rounded">
+							<div>
+								<p className="text-sm font-medium">Show crafting recipe names</p>
+								<p className="text-xs text-muted-foreground">
+									Displays internal recipe identifiers in the crafting tree.
+								</p>
+							</div>
+							<input
+								type="checkbox"
+								checked={craftingTreeShowRecipeDebugNames}
+								onChange={(event) =>
+									onCraftingTreeShowRecipeDebugNamesChange(event.target.checked)
+								}
+							/>
+						</label>
+
 						<div className="p-3 border rounded">
 							<p className="text-sm font-medium">Relic Reward Image Test</p>
 							<p className="text-xs text-muted-foreground">

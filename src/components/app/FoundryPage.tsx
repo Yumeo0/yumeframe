@@ -1,4 +1,5 @@
 import { useStore } from "@tanstack/react-store";
+import { Network, Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CraftingTreeModal } from "@/components/app/CraftingTreeModal";
 import type {
@@ -13,8 +14,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+	getNameCandidatesForPart,
+	normalizeCraftName,
+	shouldAutoCollapseRecipe,
+} from "@/lib/crafting.utils";
 import { formatDateTime } from "@/lib/datetime.utils";
-import { appStore, setAppFoundryFilter } from "@/store/appStore";
+import {
+	appStore,
+	setAppFoundryFilter,
+	setAppStarredFoundryItemKeys,
+} from "@/store/appStore";
 
 export type FoundryFilter =
 	| "all"
@@ -25,6 +35,7 @@ export type FoundryFilter =
 	| "melee"
 	| "modular"
 	| "companions"
+	| "starred"
 	| "pending";
 
 interface FoundryCategoryButton {
@@ -62,6 +73,7 @@ const FOUNDRY_CATEGORY_BUTTONS: FoundryCategoryButton[] = [
 		label: "Companions",
 		iconPath: "/icons/icon_sentinel.svg",
 	},
+	{ filter: "starred", label: "Starred", iconPath: "" },
 	{ filter: "pending", label: "Pending", iconPath: "/icons/icon_foundry.svg" },
 ];
 
@@ -76,6 +88,15 @@ interface PendingRecipeItem {
 	imageUrl: string;
 	completionTimestamp: number;
 	buildTime?: number;
+}
+
+interface MaterialRequirementItem {
+	key: string;
+	name: string;
+	imageUrl: string;
+	neededCount: number;
+	ownedCount: number;
+	isBlueprint: boolean;
 }
 
 function getTotalAffinityForLevel(level: number, isWeapon: boolean): number {
@@ -118,6 +139,9 @@ interface CollectionSectionProps {
 	onOpenCraftingTree: (item: CollectionItem) => void;
 	onOpenIngredientUsage: (item: CollectionItem) => void;
 	isIngredientItem: (item: CollectionItem) => boolean;
+	isStarred: (item: CollectionItem) => boolean;
+	onToggleStar: (item: CollectionItem) => void;
+	gridClassName?: string;
 }
 
 function CollectionSection({
@@ -128,15 +152,20 @@ function CollectionSection({
 	onOpenCraftingTree,
 	onOpenIngredientUsage,
 	isIngredientItem,
+	isStarred,
+	onToggleStar,
+	gridClassName =
+		"grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
 }: CollectionSectionProps) {
 	return (
 		<div>
 			{items.length > 0 ? (
-				<div className="grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+				<div className={gridClassName}>
 					{items.map((item) =>
 						(() => {
 							const mastered = isItemMastered(item);
 							const ingredient = isIngredientItem(item);
+							const starred = isStarred(item);
 							const isPrime = item.displayName.toLowerCase().includes("prime");
 							const requiredAffinity = getTotalAffinityForLevel(
 								item.maxLevel,
@@ -148,15 +177,30 @@ function CollectionSection({
 									key={item.key}
 									className={`group/card relative overflow-hidden transition-all hover:shadow-lg ${item.owned ? "ring-2 ring-green-500/50 bg-green-500/20" : item.isCraftingRecipe ? "ring-2 ring-amber-500/60 bg-amber-500/15" : ""} py-3 gap-0`}
 								>
-									<Button
-										type="button"
-										variant="secondary"
-										size="sm"
-										onClick={() => onOpenCraftingTree(item)}
-										className="absolute z-20 transition-opacity opacity-0 right-2 bottom-2 group-hover/card:opacity-100"
-									>
-										Crafting Tree
-									</Button>
+									<div className="absolute z-20 flex items-center gap-1 transition-opacity opacity-0 right-2 bottom-2 group-hover/card:opacity-100">
+										<Button
+											type="button"
+											variant={starred ? "default" : "outline"}
+											size="sm"
+											onClick={() => onToggleStar(item)}
+											aria-label={starred ? "Unstar item" : "Star item"}
+											title={starred ? "Unstar" : "Star"}
+										>
+											<Star
+												className={`h-4 w-4 ${starred ? "fill-current" : ""}`}
+											/>
+										</Button>
+										<Button
+											type="button"
+											variant="secondary"
+											size="sm"
+											onClick={() => onOpenCraftingTree(item)}
+											aria-label="Open crafting tree"
+											title="Crafting Tree"
+										>
+											<Network className="w-4 h-4" />
+										</Button>
+									</div>
 									<CardHeader>
 										<div className="flex items-start justify-between">
 											<div className="flex-1">
@@ -423,6 +467,85 @@ function PendingRecipesSection({
 	);
 }
 
+function MaterialRequirementsPanel({
+	requirements,
+}: {
+	requirements: MaterialRequirementItem[];
+}) {
+	const [hideBlueprints, setHideBlueprints] = useState(false);
+	const [hideOwned, setHideOwned] = useState(false);
+
+	const visibleRequirements = useMemo(
+		() =>
+			requirements.filter((material) => {
+				if (hideBlueprints && material.isBlueprint) {
+					return false;
+				}
+				if (hideOwned && material.ownedCount >= material.neededCount) {
+					return false;
+				}
+				return true;
+			}),
+		[requirements, hideBlueprints, hideOwned],
+	);
+
+	return (
+		<Card className="flex max-h-[calc(100vh-220px)] flex-col gap-2 p-2">
+			<CardHeader className="gap-2 px-2">
+				<CardTitle className="text-base">Crafting Materials</CardTitle>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						type="button"
+						variant={hideBlueprints ? "default" : "outline"}
+						size="sm"
+						onClick={() => setHideBlueprints((previous) => !previous)}
+					>
+						{hideBlueprints ? "Show Blueprints" : "Hide Blueprints"}
+					</Button>
+					<Button
+						type="button"
+						variant={hideOwned ? "default" : "outline"}
+						size="sm"
+						onClick={() => setHideOwned((previous) => !previous)}
+					>
+						{hideOwned ? "Show Owned" : "Hide Owned"}
+					</Button>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 px-2">
+				<ScrollArea className="h-full pr-2">
+					{visibleRequirements.length === 0 ? (
+						<p className="text-sm text-muted-foreground">
+							No missing material requirements for selected items.
+						</p>
+					) : (
+						<div className="space-y-1">
+							{visibleRequirements.map((material) => (
+								<div
+									key={material.key}
+									className={`flex items-center justify-between gap-2 rounded px-2 py-1 ${material.ownedCount >= material.neededCount ? "bg-green-500/10" : "bg-amber-500/10"}`}
+								>
+									<div className="flex items-center min-w-0 gap-2">
+										<img
+											src={material.imageUrl}
+											alt={material.name}
+											className="object-cover w-8 h-8 rounded"
+										/>
+										<p className="text-sm truncate">{material.name}</p>
+									</div>
+									<Badge variant="secondary">
+										{material.ownedCount}/{material.neededCount}
+									</Badge>
+								</div>
+							))}
+						</div>
+					)}
+				</ScrollArea>
+			</CardContent>
+		</Card>
+	);
+}
+
 export function FoundryPage({ error }: FoundryPageProps) {
 	const foundryFilter = useStore(appStore, (state) => state.foundryFilter);
 	const warframes = useStore(appStore, (state) => state.warframes);
@@ -430,6 +553,18 @@ export function FoundryPage({ error }: FoundryPageProps) {
 	const companions = useStore(appStore, (state) => state.companions);
 	const pendingRecipes = useStore(appStore, (state) => state.pendingRecipes);
 	const use24HourClock = useStore(appStore, (state) => state.use24HourClock);
+	const craftingTreeShowRecipeDebugNames = useStore(
+		appStore,
+		(state) => state.craftingTreeShowRecipeDebugNames,
+	);
+	const craftingTreeAutoCollapseAllParts = useStore(
+		appStore,
+		(state) => state.craftingTreeAutoCollapseAllParts,
+	);
+	const starredFoundryItemKeys = useStore(
+		appStore,
+		(state) => state.starredFoundryItemKeys,
+	);
 	const loading = useStore(appStore, (state) => state.inventoryLoading);
 	const primeResurgenceItemTypes = useStore(
 		appStore,
@@ -612,9 +747,8 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		mapWeaponToItem(weapon),
 	);
 
-	const companionCompanionItems: CollectionItem[] = companions.map(
-		mapCompanionToItem,
-	);
+	const companionCompanionItems: CollectionItem[] =
+		companions.map(mapCompanionToItem);
 
 	const companionWeaponItems: CollectionItem[] = sentinelWeapons.map((weapon) =>
 		mapWeaponToItem(weapon),
@@ -657,6 +791,147 @@ export function FoundryPage({ error }: FoundryPageProps) {
 			companionItems,
 		],
 	);
+
+	const starredFoundryItemKeySet = useMemo(
+		() => new Set(starredFoundryItemKeys),
+		[starredFoundryItemKeys],
+	);
+
+	const byType = useMemo(() => {
+		const map = new Map<string, CollectionItem>();
+		for (const entry of allCollectionItems) {
+			map.set(entry.key, entry);
+		}
+		return map;
+	}, [allCollectionItems]);
+
+	const byName = useMemo(() => {
+		const map = new Map<string, CollectionItem[]>();
+		for (const entry of allCollectionItems) {
+			for (const value of [entry.displayName, entry.name]) {
+				const normalized = normalizeCraftName(value);
+				const existing = map.get(normalized);
+				if (existing) {
+					existing.push(entry);
+				} else {
+					map.set(normalized, [entry]);
+				}
+			}
+		}
+		return map;
+	}, [allCollectionItems]);
+
+	const resolveCraftableItem = useCallback(
+		(part: CollectionPart): CollectionItem | undefined => {
+			if (part.itemType) {
+				const exact = byType.get(part.itemType);
+				if (exact) {
+					return exact;
+				}
+			}
+
+			for (const candidate of getNameCandidatesForPart(part)) {
+				const matches = byName.get(normalizeCraftName(candidate));
+				if (matches && matches.length > 0) {
+					return matches[0];
+				}
+			}
+
+			return undefined;
+		},
+		[byType, byName],
+	);
+
+	const starredItems = useMemo(
+		() =>
+			allCollectionItems.filter((item) =>
+				starredFoundryItemKeySet.has(item.key),
+			),
+		[allCollectionItems, starredFoundryItemKeySet],
+	);
+
+	const starredMaterialRequirements = useMemo(() => {
+		const totals = new Map<string, MaterialRequirementItem>();
+
+		const addMaterial = (part: CollectionPart, quantity: number) => {
+			if (quantity <= 0) {
+				return;
+			}
+
+			const materialKey = part.itemType
+				? part.itemType
+				: `name:${normalizeCraftName(part.name)}`;
+			const isBlueprint = /blueprint/i.test(part.name);
+			const ownedCount =
+				part.owned === true ? quantity : part.hasRecipe === true ? quantity : 0;
+			const existing = totals.get(materialKey);
+			if (existing) {
+				existing.neededCount += quantity;
+				existing.ownedCount += ownedCount;
+				return;
+			}
+
+			totals.set(materialKey, {
+				key: materialKey,
+				name: part.name,
+				imageUrl: part.imageUrl,
+				neededCount: quantity,
+				ownedCount,
+				isBlueprint,
+			});
+		};
+
+		const collectPart = (
+			part: CollectionPart,
+			multiplier: number,
+			path: Set<string>,
+		) => {
+			const quantity = Math.max(1, part.count ?? 1) * multiplier;
+			const resolved = resolveCraftableItem(part);
+			const recipeUniqueName = resolved?.key ?? part.itemType;
+			const shouldStopExpansion = shouldAutoCollapseRecipe(recipeUniqueName);
+
+			if (shouldStopExpansion) {
+				addMaterial(part, quantity);
+				return;
+			}
+
+			if (part.requirements && part.requirements.length > 0) {
+				for (const childPart of part.requirements) {
+					collectPart(childPart, quantity, path);
+				}
+				return;
+			}
+
+			if (resolved && !path.has(resolved.key) && resolved.parts.length > 0) {
+				const nextPath = new Set(path);
+				nextPath.add(resolved.key);
+				for (const childPart of resolved.parts) {
+					collectPart(childPart, quantity, nextPath);
+				}
+				return;
+			}
+
+			addMaterial(part, quantity);
+		};
+
+		for (const item of starredItems) {
+			if (item.owned) {
+				continue;
+			}
+			const path = new Set<string>([item.key]);
+			for (const part of item.parts) {
+				collectPart(part, 1, path);
+			}
+		}
+
+		return [...totals.values()].sort((a, b) => {
+			if (b.neededCount !== a.neededCount) {
+				return b.neededCount - a.neededCount;
+			}
+			return a.name.localeCompare(b.name);
+		});
+	}, [starredItems, resolveCraftableItem]);
 
 	const ingredientItemKeys = useMemo(() => {
 		const keys = new Set<string>();
@@ -836,9 +1111,71 @@ export function FoundryPage({ error }: FoundryPageProps) {
 		},
 		[],
 	);
+	const toggleStarredItem = useCallback((item: CollectionItem) => {
+		setAppStarredFoundryItemKeys((previous) => {
+			if (previous.includes(item.key)) {
+				return previous.filter((value) => value !== item.key);
+			}
+			return [...previous, item.key];
+		});
+	}, []);
+	const isItemStarred = useCallback(
+		(item: CollectionItem) => starredFoundryItemKeySet.has(item.key),
+		[starredFoundryItemKeySet],
+	);
 	const isIngredientItem = useCallback(
 		(item: CollectionItem) => ingredientItemKeys.has(item.key),
 		[ingredientItemKeys],
+	);
+
+	const renderCollection = useCallback(
+		(
+			items: CollectionItem[],
+			emptyLoadingText: string,
+			emptyIdleText: string,
+			includeMaterials = false,
+		) => {
+			const isStarredLayout = includeMaterials;
+			const collection = (
+				<CollectionSection
+					items={filterItems(items)}
+					loading={loading}
+					emptyLoadingText={emptyLoadingText}
+					emptyIdleText={emptyIdleText}
+					onOpenCraftingTree={setCraftingTreeItem}
+					onOpenIngredientUsage={setIngredientUsageItem}
+					isIngredientItem={isIngredientItem}
+					isStarred={isItemStarred}
+					onToggleStar={toggleStarredItem}
+					gridClassName={
+						isStarredLayout
+							? "grid grid-cols-1 gap-2 p-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+							: undefined
+					}
+				/>
+			);
+
+			if (!includeMaterials) {
+				return collection;
+			}
+
+			return (
+				<div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+					{collection}
+					<MaterialRequirementsPanel
+						requirements={starredMaterialRequirements}
+					/>
+				</div>
+			);
+		},
+		[
+			filterItems,
+			loading,
+			isIngredientItem,
+			isItemStarred,
+			toggleStarredItem,
+			starredMaterialRequirements,
+		],
 	);
 
 	return (
@@ -859,20 +1196,27 @@ export function FoundryPage({ error }: FoundryPageProps) {
 									onClick={() => setAppFoundryFilter(category.filter)}
 									className={getFilterButtonClasses(isActive)}
 								>
-									<span
-										aria-hidden="true"
-										className={`h-6 w-6 shrink-0 ${isActive ? "bg-primary-foreground" : "bg-foreground"}`}
-										style={{
-											maskImage: `url("${category.iconPath}")`,
-											WebkitMaskImage: `url("${category.iconPath}")`,
-											maskRepeat: "no-repeat",
-											WebkitMaskRepeat: "no-repeat",
-											maskPosition: "center",
-											WebkitMaskPosition: "center",
-											maskSize: "contain",
-											WebkitMaskSize: "contain",
-										}}
-									/>
+									{category.filter === "starred" ? (
+										<Star
+											aria-hidden="true"
+											className={`h-6 w-6 shrink-0 fill-current ${isActive ? "text-primary-foreground" : "text-foreground"}`}
+										/>
+									) : (
+										<span
+											aria-hidden="true"
+											className={`h-6 w-6 shrink-0 ${isActive ? "bg-primary-foreground" : "bg-foreground"}`}
+											style={{
+												maskImage: `url("${category.iconPath}")`,
+												WebkitMaskImage: `url("${category.iconPath}")`,
+												maskRepeat: "no-repeat",
+												WebkitMaskRepeat: "no-repeat",
+												maskPosition: "center",
+												WebkitMaskPosition: "center",
+												maskSize: "contain",
+												WebkitMaskSize: "contain",
+											}}
+										/>
+									)}
 									<span className={getFilterLabelClasses(isActive)}>
 										{category.label}
 									</span>
@@ -971,101 +1315,69 @@ export function FoundryPage({ error }: FoundryPageProps) {
 
 				<ScrollArea className="flex-1 min-h-0">
 					<div className="space-y-2">
-						{foundryFilter === "all" && (
-							<CollectionSection
-								items={filterItems(allCollectionItems)}
-								loading={loading}
-								emptyLoadingText="Loading item data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load item data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "all" &&
+							renderCollection(
+								allCollectionItems,
+								"Loading item data...",
+								"Click Refresh Inventory in the sidebar to load item data",
+							)}
 
-						{foundryFilter === "warframes" && (
-							<CollectionSection
-								items={filterItems(warframeItems)}
-								loading={loading}
-								emptyLoadingText="Loading warframe data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load warframe data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "warframes" &&
+							renderCollection(
+								warframeItems,
+								"Loading warframe data...",
+								"Click Refresh Inventory in the sidebar to load warframe data",
+							)}
 
-						{foundryFilter === "archwings" && (
-							<CollectionSection
-								items={filterItems(allArchwingItems)}
-								loading={loading}
-								emptyLoadingText="Loading archwing data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load archwing data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "archwings" &&
+							renderCollection(
+								allArchwingItems,
+								"Loading archwing data...",
+								"Click Refresh Inventory in the sidebar to load archwing data",
+							)}
 
-						{foundryFilter === "primary" && (
-							<CollectionSection
-								items={filterItems(primaryItems)}
-								loading={loading}
-								emptyLoadingText="Loading primary weapon data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load primary weapon data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "primary" &&
+							renderCollection(
+								primaryItems,
+								"Loading primary weapon data...",
+								"Click Refresh Inventory in the sidebar to load primary weapon data",
+							)}
 
-						{foundryFilter === "secondary" && (
-							<CollectionSection
-								items={filterItems(secondaryItems)}
-								loading={loading}
-								emptyLoadingText="Loading secondary weapon data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load secondary weapon data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "secondary" &&
+							renderCollection(
+								secondaryItems,
+								"Loading secondary weapon data...",
+								"Click Refresh Inventory in the sidebar to load secondary weapon data",
+							)}
 
-						{foundryFilter === "melee" && (
-							<CollectionSection
-								items={filterItems(meleeItems)}
-								loading={loading}
-								emptyLoadingText="Loading melee weapon data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load melee weapon data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "melee" &&
+							renderCollection(
+								meleeItems,
+								"Loading melee weapon data...",
+								"Click Refresh Inventory in the sidebar to load melee weapon data",
+							)}
 
-						{foundryFilter === "modular" && (
-							<CollectionSection
-								items={filterItems(modularWeaponItems)}
-								loading={loading}
-								emptyLoadingText="Loading modular weapon data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load modular weapon data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "modular" &&
+							renderCollection(
+								modularWeaponItems,
+								"Loading modular weapon data...",
+								"Click Refresh Inventory in the sidebar to load modular weapon data",
+							)}
 
-						{foundryFilter === "companions" && (
-							<CollectionSection
-								items={filterItems(companionItems)}
-								loading={loading}
-								emptyLoadingText="Loading companion data..."
-								emptyIdleText="Click Refresh Inventory in the sidebar to load companion data"
-								onOpenCraftingTree={setCraftingTreeItem}
-								onOpenIngredientUsage={setIngredientUsageItem}
-								isIngredientItem={isIngredientItem}
-							/>
-						)}
+						{foundryFilter === "companions" &&
+							renderCollection(
+								companionItems,
+								"Loading companion data...",
+								"Click Refresh Inventory in the sidebar to load companion data",
+							)}
+
+						{foundryFilter === "starred" &&
+							renderCollection(
+								starredItems,
+								"Loading starred items...",
+								"Star items to track them and see shared crafting materials",
+								true,
+							)}
 
 						{foundryFilter === "pending" && (
 							<PendingRecipesSection
@@ -1084,6 +1396,8 @@ export function FoundryPage({ error }: FoundryPageProps) {
 					key={craftingTreeItem.key}
 					item={craftingTreeItem}
 					allItems={allCollectionItems}
+					showDebugRecipeNames={craftingTreeShowRecipeDebugNames}
+					autoCollapseAllParts={craftingTreeAutoCollapseAllParts}
 					onClose={() => setCraftingTreeItem(null)}
 				/>
 			) : null}

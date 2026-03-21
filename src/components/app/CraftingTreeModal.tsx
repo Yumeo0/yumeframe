@@ -5,16 +5,25 @@ import type {
 	CollectionPart,
 } from "@/components/app/foundry.types";
 import { Button } from "@/components/ui/button";
+import {
+	getNameCandidatesForPart,
+	normalizeCraftName,
+	shouldAutoCollapseRecipe,
+} from "@/lib/crafting.utils";
 
 interface CraftingTreeModalProps {
 	item: CollectionItem;
 	allItems: CollectionItem[];
+	showDebugRecipeNames: boolean;
+	autoCollapseAllParts: boolean;
 	onClose: () => void;
 }
 
 interface CraftingTreeNode {
 	id: string;
 	name: string;
+	recipeName?: string;
+	recipeUniqueName?: string;
 	imageUrl: string;
 	count?: number;
 	owned?: boolean;
@@ -26,6 +35,7 @@ interface CraftingTreeNode {
 interface PositionedNode {
 	id: string;
 	name: string;
+	recipeName?: string;
 	imageUrl: string;
 	count?: number;
 	owned?: boolean;
@@ -53,25 +63,6 @@ const H_GAP = 20;
 const V_GAP = 132;
 const MAX_DEPTH = 8;
 
-function normalizeCraftName(value: string): string {
-	return value.trim().toLowerCase();
-}
-
-function getNameCandidatesForPart(part: CollectionPart): string[] {
-	const candidates = new Set<string>();
-	const baseName = part.name.trim();
-
-	candidates.add(baseName);
-
-	// Parts frequently appear as "<Part Name> Blueprint" in requirements.
-	const withoutBlueprintSuffix = baseName.replace(/\s+blueprint$/i, "").trim();
-	if (withoutBlueprintSuffix.length > 0) {
-		candidates.add(withoutBlueprintSuffix);
-	}
-
-	return [...candidates];
-}
-
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value));
 }
@@ -86,6 +77,8 @@ interface RTNode {
 	// Source data
 	id: string;
 	name: string;
+	recipeName?: string;
+	recipeUniqueName?: string;
 	imageUrl: string;
 	count?: number;
 	owned?: boolean;
@@ -117,6 +110,8 @@ function buildRTTree(
 	const node: RTNode = {
 		id: src.id,
 		name: src.name,
+		recipeName: src.recipeName,
+		recipeUniqueName: src.recipeUniqueName,
 		imageUrl: src.imageUrl,
 		count: src.count,
 		owned: src.owned,
@@ -277,6 +272,7 @@ function rtSecondWalk(
 	nodes.push({
 		id: v.id,
 		name: v.name,
+		recipeName: v.recipeName,
 		imageUrl: v.imageUrl,
 		count: v.count,
 		owned: v.owned,
@@ -345,12 +341,76 @@ function getNodeStateClass(node: PositionedNode): string {
 	return "border-border bg-card";
 }
 
+function collectDefaultExpandedNodes(
+	node: CraftingTreeNode,
+	expandedNodeIds: Set<string>,
+	autoCollapseAllParts: boolean,
+	isRoot = false,
+): void {
+	if (node.children.length === 0) {
+		return;
+	}
+
+	if (
+		isRoot ||
+		(!autoCollapseAllParts && !shouldAutoCollapseRecipe(node.recipeUniqueName))
+	) {
+		expandedNodeIds.add(node.id);
+	}
+
+	for (const child of node.children) {
+		collectDefaultExpandedNodes(child, expandedNodeIds, autoCollapseAllParts);
+	}
+}
+
+function buildVisibleTree(
+	node: CraftingTreeNode,
+	expandedNodeIds: Set<string>,
+	hideOwnedNodes: boolean,
+	isRoot = false,
+	): CraftingTreeNode | null {
+	if (!isRoot && hideOwnedNodes && node.owned === true) {
+		return null;
+	}
+
+	if (node.children.length === 0) {
+		return { ...node, children: [] };
+	}
+
+	const isExpanded = isRoot || expandedNodeIds.has(node.id);
+	const visibleChildren = isExpanded
+		? node.children
+				.map((child) =>
+					buildVisibleTree(child, expandedNodeIds, hideOwnedNodes),
+				)
+				.filter((child): child is CraftingTreeNode => child !== null)
+		: [];
+
+	return {
+		...node,
+		children: visibleChildren,
+	};
+}
+
+function collectExpandableNodeIds(node: CraftingTreeNode, ids: Set<string>): void {
+	if (node.children.length > 0) {
+		ids.add(node.id);
+	}
+	for (const child of node.children) {
+		collectExpandableNodeIds(child, ids);
+	}
+}
+
 export function CraftingTreeModal({
 	item,
 	allItems,
+	showDebugRecipeNames,
+	autoCollapseAllParts,
 	onClose,
 }: CraftingTreeModalProps) {
 	const viewportRef = useRef<HTMLDivElement | null>(null);
+	const recenterAfterHideOwnedToggleRef = useRef(false);
+	const hideOwnedInitializedRef = useRef(false);
 	const scaleRef = useRef(1);
 	const offsetRef = useRef({ x: 40, y: 40 });
 	const dragRef = useRef<{
@@ -359,6 +419,10 @@ export function CraftingTreeModal({
 		originX: number;
 		originY: number;
 	} | null>(null);
+	const initializedForItemKeyRef = useRef<string | null>(null);
+	const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+	const [hideOwnedNodes, setHideOwnedNodes] = useState(false);
+	const [pendingInitialCenter, setPendingInitialCenter] = useState(false);
 	const [scale, setScale] = useState(1);
 	const [offset, setOffset] = useState({ x: 40, y: 40 });
 
@@ -429,6 +493,8 @@ export function CraftingTreeModal({
 				return {
 					id,
 					name: part.name,
+					recipeName: part.itemType ?? part.name,
+					recipeUniqueName: part.itemType,
 					imageUrl: part.imageUrl,
 					count: part.count,
 					owned: part.owned,
@@ -458,6 +524,8 @@ export function CraftingTreeModal({
 			return {
 				id,
 				name: part.name,
+				recipeName: resolved ? `${resolved.name} (${resolved.key})` : (part.itemType ?? part.name),
+				recipeUniqueName: resolved?.key ?? part.itemType,
 				imageUrl: part.imageUrl,
 				count: part.count,
 				owned: part.owned,
@@ -480,6 +548,8 @@ export function CraftingTreeModal({
 		return {
 			id: item.key,
 			name: item.displayName,
+			recipeName: `${item.name} (${item.key})`,
+			recipeUniqueName: item.key,
 			imageUrl: item.imageUrl,
 			owned: item.owned,
 			isCraftable: true,
@@ -489,7 +559,95 @@ export function CraftingTreeModal({
 		} satisfies CraftingTreeNode;
 	}, [item, resolveCraftableItem]);
 
-	const layout = useMemo(() => buildTreeLayout(tree), [tree]);
+	const expandableNodeIds = useMemo(() => {
+		const ids = new Set<string>();
+		collectExpandableNodeIds(tree, ids);
+		return ids;
+	}, [tree]);
+
+	useEffect(() => {
+		if (initializedForItemKeyRef.current === item.key) {
+			return;
+		}
+
+		initializedForItemKeyRef.current = item.key;
+		const defaults = new Set<string>();
+		collectDefaultExpandedNodes(tree, defaults, autoCollapseAllParts, true);
+		setPendingInitialCenter(true);
+		setExpandedNodeIds(defaults);
+	}, [item.key, tree, autoCollapseAllParts]);
+
+	const visibleTree = useMemo(() => {
+		return (
+			buildVisibleTree(tree, expandedNodeIds, hideOwnedNodes, true) ?? {
+				...tree,
+				children: [],
+			}
+		);
+	}, [tree, expandedNodeIds, hideOwnedNodes]);
+
+	const layout = useMemo(() => buildTreeLayout(visibleTree), [visibleTree]);
+
+	const recenterTree = useCallback((nextScale?: number) => {
+		const viewport = viewportRef.current;
+		if (!viewport) {
+			return;
+		}
+
+		const appliedScale = nextScale ?? scaleRef.current;
+		const rect = viewport.getBoundingClientRect();
+		const topMargin = 24;
+		const centeredX = (rect.width - layout.width * appliedScale) / 2;
+
+		setOffset({
+			x: centeredX,
+			y: topMargin,
+		});
+	}, [layout.width]);
+
+	const toggleNode = useCallback((nodeId: string) => {
+		setExpandedNodeIds((previous) => {
+			const next = new Set(previous);
+			if (next.has(nodeId)) {
+				next.delete(nodeId);
+			} else {
+				next.add(nodeId);
+			}
+			return next;
+		});
+	}, []);
+
+	useEffect(() => {
+		if (!pendingInitialCenter) {
+			return;
+		}
+
+		// Center only after the default-expanded layout for this item is ready.
+		setScale(1);
+		const rafId = window.requestAnimationFrame(() => {
+			recenterTree(1);
+			setPendingInitialCenter(false);
+		});
+
+		return () => {
+			window.cancelAnimationFrame(rafId);
+		};
+	}, [pendingInitialCenter, recenterTree]);
+
+	useEffect(() => {
+		if (!hideOwnedInitializedRef.current) {
+			hideOwnedInitializedRef.current = true;
+			return;
+		}
+
+		if (!recenterAfterHideOwnedToggleRef.current) {
+			return;
+		}
+
+		recenterAfterHideOwnedToggleRef.current = false;
+
+		recenterTree();
+	}, [recenterTree]);
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -602,6 +760,17 @@ export function CraftingTreeModal({
 					<div className="flex items-center gap-2">
 						<Button
 							type="button"
+							variant={hideOwnedNodes ? "default" : "outline"}
+							size="sm"
+							onClick={() => {
+								recenterAfterHideOwnedToggleRef.current = true;
+								setHideOwnedNodes((previous) => !previous);
+							}}
+						>
+							Hide Owned
+						</Button>
+						<Button
+							type="button"
 							variant="outline"
 							size="sm"
 							onClick={() => setScale((prev) => clamp(prev - 0.1, 0.45, 2.4))}
@@ -625,7 +794,7 @@ export function CraftingTreeModal({
 							size="sm"
 							onClick={() => {
 								setScale(1);
-								setOffset({ x: 40, y: 40 });
+								recenterTree(1);
 							}}
 						>
 							Reset
@@ -747,7 +916,20 @@ export function CraftingTreeModal({
 									height: NODE_HEIGHT,
 								}}
 							>
-								<div className="flex items-center h-full gap-2 p-2">
+								<div className="relative flex items-center h-full gap-2 p-2">
+									{expandableNodeIds.has(node.id) && node.id !== item.key ? (
+										<button
+											type="button"
+											className="absolute top-1 right-1 h-5 min-w-5 rounded border bg-background/80 px-1 text-[10px] leading-none hover:bg-background"
+											onMouseDown={(event) => event.stopPropagation()}
+											onClick={(event) => {
+												event.stopPropagation();
+												toggleNode(node.id);
+											}}
+										>
+											{expandedNodeIds.has(node.id) ? "-" : "+"}
+										</button>
+									) : null}
 									<img
 										src={node.imageUrl}
 										alt={node.name}
@@ -755,6 +937,11 @@ export function CraftingTreeModal({
 									/>
 									<div className="min-w-0">
 										<p className="text-sm font-medium truncate">{node.name}</p>
+										{showDebugRecipeNames && node.recipeName ? (
+											<p className="text-[10px] leading-tight text-muted-foreground truncate">
+												{node.recipeName}
+											</p>
+										) : null}
 										<p className="text-xs text-muted-foreground">
 											{node.count ? `x${node.count} • ` : ""}
 											{getNodeStatus(node)}
