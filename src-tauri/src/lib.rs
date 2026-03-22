@@ -33,6 +33,8 @@ pub fn run() {
             warframe_api::fetch_companion_data,
             warframe_api::fetch_relic_data,
             warframe_api::fetch_upgrade_data,
+            warframe_api::fetch_regions_data,
+            warframe_api::fetch_latest_arbitration_stats,
             relic_scanner::start_relic_scanner,
             relic_scanner::stop_relic_scanner,
             relic_scanner::trigger_relic_scan,

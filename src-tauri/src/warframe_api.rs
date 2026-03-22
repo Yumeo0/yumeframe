@@ -1,9 +1,11 @@
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
+use std::fs::File;
 use std::fs;
 #[cfg(target_os = "linux")]
 use std::io::{BufRead, BufReader};
+use std::io::{Read, Seek, SeekFrom};
 #[cfg(target_os = "linux")]
 use std::path::Path;
 use std::path::PathBuf;
@@ -202,6 +204,321 @@ fn detect_ee_log_paths_internal() -> Vec<String> {
 #[tauri::command]
 pub fn detect_ee_log_paths() -> Vec<String> {
     detect_ee_log_paths_internal()
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArbitrationLiveStats {
+    session_found: bool,
+    mission_code: Option<String>,
+    started_at_log_seconds: Option<f64>,
+    ended_at_log_seconds: Option<f64>,
+    duration_seconds: u64,
+    rounds_completed: u32,
+    rewards_detected: u32,
+    drone_spawns: u32,
+    drone_kills: u32,
+    enemies_killed: u32,
+    revives: u32,
+    vitus_essence_pickups: u32,
+    extraction_detected: bool,
+    lines_scanned: usize,
+    note: Option<String>,
+}
+
+impl ArbitrationLiveStats {
+    fn empty(note: Option<String>, lines_scanned: usize) -> Self {
+        Self {
+            session_found: false,
+            mission_code: None,
+            started_at_log_seconds: None,
+            ended_at_log_seconds: None,
+            duration_seconds: 0,
+            rounds_completed: 0,
+            rewards_detected: 0,
+            drone_spawns: 0,
+            drone_kills: 0,
+            enemies_killed: 0,
+            revives: 0,
+            vitus_essence_pickups: 0,
+            extraction_detected: false,
+            lines_scanned,
+            note,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ArbitrationSessionAccumulator {
+    mission_code: Option<String>,
+    started_at_log_seconds: Option<f64>,
+    ended_at_log_seconds: Option<f64>,
+    rounds_completed: u32,
+    rewards_detected: u32,
+    drone_spawns: u32,
+    drone_kills: u32,
+    enemies_killed: u32,
+    revives: u32,
+    vitus_essence_pickups: u32,
+    extraction_detected: bool,
+}
+
+impl ArbitrationSessionAccumulator {
+    fn new() -> Self {
+        Self {
+            mission_code: None,
+            started_at_log_seconds: None,
+            ended_at_log_seconds: None,
+            rounds_completed: 0,
+            rewards_detected: 0,
+            drone_spawns: 0,
+            drone_kills: 0,
+            enemies_killed: 0,
+            revives: 0,
+            vitus_essence_pickups: 0,
+            extraction_detected: false,
+        }
+    }
+
+    fn into_stats(self, lines_scanned: usize) -> ArbitrationLiveStats {
+        let duration_seconds = match (self.started_at_log_seconds, self.ended_at_log_seconds) {
+            (Some(start), Some(end)) if end > start => (end - start).floor() as u64,
+            _ => 0,
+        };
+
+        ArbitrationLiveStats {
+            session_found: true,
+            mission_code: self.mission_code,
+            started_at_log_seconds: self.started_at_log_seconds,
+            ended_at_log_seconds: self.ended_at_log_seconds,
+            duration_seconds,
+            rounds_completed: self.rounds_completed,
+            rewards_detected: self.rewards_detected,
+            drone_spawns: self.drone_spawns,
+            drone_kills: self.drone_kills,
+            enemies_killed: self.enemies_killed,
+            revives: self.revives,
+            vitus_essence_pickups: self.vitus_essence_pickups,
+            extraction_detected: self.extraction_detected,
+            lines_scanned,
+            note: None,
+        }
+    }
+}
+
+fn resolve_ee_log_path_from_input(ee_log_path: Option<String>) -> Option<String> {
+    let provided = ee_log_path
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if !provided.is_empty() && PathBuf::from(&provided).is_file() {
+        return Some(provided);
+    }
+
+    detect_ee_log_paths_internal().into_iter().next()
+}
+
+fn read_log_tail(path: &str, max_bytes: usize) -> Result<String, String> {
+    let mut file = File::open(path).map_err(|err| format!("Failed to open EE.log: {err}"))?;
+    let size = file
+        .metadata()
+        .map_err(|err| format!("Failed to read EE.log metadata: {err}"))?
+        .len();
+
+    let max_bytes_u64 = max_bytes as u64;
+    let offset = if size > max_bytes_u64 {
+        (size - max_bytes_u64) as i64
+    } else {
+        0
+    };
+
+    file.seek(SeekFrom::Start(offset as u64))
+        .map_err(|err| format!("Failed to seek EE.log: {err}"))?;
+
+    let mut buffer = String::new();
+    file.read_to_string(&mut buffer)
+        .map_err(|err| format!("Failed to read EE.log: {err}"))?;
+
+    if offset > 0 {
+        if let Some(idx) = buffer.find('\n') {
+            return Ok(buffer[idx + 1..].to_string());
+        }
+    }
+
+    Ok(buffer)
+}
+
+fn parse_log_seconds(line: &str) -> Option<f64> {
+    let trimmed = line.trim_start();
+    let mut end = 0usize;
+    for (idx, ch) in trimmed.char_indices() {
+        if ch.is_ascii_digit() || ch == '.' {
+            end = idx + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if end == 0 {
+        return None;
+    }
+
+    trimmed[..end].parse::<f64>().ok()
+}
+
+fn extract_first_u32(line: &str) -> Option<u32> {
+    let mut start = None;
+    for (idx, ch) in line.char_indices() {
+        if ch.is_ascii_digit() {
+            if start.is_none() {
+                start = Some(idx);
+            }
+        } else if let Some(begin) = start {
+            return line[begin..idx].parse::<u32>().ok();
+        }
+    }
+
+    if let Some(begin) = start {
+        return line[begin..].parse::<u32>().ok();
+    }
+
+    None
+}
+
+fn extract_node_token(line: &str) -> Option<String> {
+    for token in line
+        .split(|ch: char| !ch.is_ascii_alphanumeric())
+        .filter(|value| !value.is_empty())
+    {
+        if token.starts_with("SolNode")
+            || token.starts_with("ClanNode")
+            || token.starts_with("SettlementNode")
+        {
+            return Some(token.to_string());
+        }
+    }
+
+    None
+}
+
+fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
+    let mut current: Option<ArbitrationSessionAccumulator> = None;
+    let mut latest_complete: Option<ArbitrationSessionAccumulator> = None;
+
+    for line in lines {
+        let lower = line.to_ascii_lowercase();
+        let log_time = parse_log_seconds(line);
+
+        let mentions_arbitration =
+            lower.contains("arbitration") || lower.contains("elitealert");
+
+        if mentions_arbitration {
+            if current.is_none() {
+                current = Some(ArbitrationSessionAccumulator::new());
+            }
+            if let Some(session) = current.as_mut() {
+                if session.started_at_log_seconds.is_none() {
+                    session.started_at_log_seconds = log_time;
+                }
+                if session.mission_code.is_none() {
+                    session.mission_code = extract_node_token(line);
+                }
+            }
+        }
+
+        if let Some(session) = current.as_mut() {
+            if session.mission_code.is_none() {
+                session.mission_code = extract_node_token(line);
+            }
+
+            if lower.contains("round")
+                && (lower.contains("complete") || lower.contains("newround") || lower.contains("new round"))
+            {
+                if let Some(parsed) = extract_first_u32(&lower) {
+                    session.rounds_completed = session.rounds_completed.max(parsed);
+                } else {
+                    session.rounds_completed = session.rounds_completed.saturating_add(1);
+                }
+            }
+
+            if lower.contains("reward")
+                && (lower.contains("got")
+                    || lower.contains("give")
+                    || lower.contains("added")
+                    || lower.contains("inventory"))
+            {
+                session.rewards_detected = session.rewards_detected.saturating_add(1);
+            }
+
+            if lower.contains("arbitrationdrone") {
+                if lower.contains("spawn") || lower.contains("created") {
+                    session.drone_spawns = session.drone_spawns.saturating_add(1);
+                }
+                if lower.contains("kill") || lower.contains("destroy") || lower.contains("died") {
+                    session.drone_kills = session.drone_kills.saturating_add(1);
+                }
+            }
+
+            if lower.contains("vitus") {
+                session.vitus_essence_pickups = session.vitus_essence_pickups.saturating_add(1);
+            }
+
+            if lower.contains("enemy") && lower.contains("kill") {
+                session.enemies_killed = session.enemies_killed.saturating_add(1);
+            }
+
+            if lower.contains("revive") {
+                session.revives = session.revives.saturating_add(1);
+            }
+
+            if lower.contains("extract") {
+                session.extraction_detected = true;
+            }
+
+            if lower.contains("commitinventorychangestodb")
+                || lower.contains("mission complete")
+                || lower.contains("end of mission")
+            {
+                session.ended_at_log_seconds = log_time.or(session.ended_at_log_seconds);
+                latest_complete = Some(session.clone());
+                current = None;
+            }
+        }
+    }
+
+    if let Some(session) = latest_complete {
+        return session.into_stats(lines.len());
+    }
+
+    ArbitrationLiveStats::empty(
+        Some("No completed arbitration session was found in the recent EE.log window".to_string()),
+        lines.len(),
+    )
+}
+
+#[tauri::command]
+pub fn fetch_latest_arbitration_stats(
+    ee_log_path: Option<String>,
+) -> Result<ArbitrationLiveStats, String> {
+    let path = resolve_ee_log_path_from_input(ee_log_path)
+        .ok_or_else(|| "Could not resolve a valid EE.log path".to_string())?;
+
+    let content = read_log_tail(&path, 8 * 1024 * 1024)?;
+    let lines: Vec<&str> = content.lines().collect();
+    let mut stats = parse_latest_arbitration_stats(&lines);
+
+    if !stats.session_found {
+        stats.note = Some(format!(
+            "{} (path: {})",
+            stats
+                .note
+                .unwrap_or_else(|| "No completed arbitration session found".to_string()),
+            path
+        ));
+    }
+
+    Ok(stats)
 }
 
 /// Get the cache directory for the app
@@ -868,6 +1185,12 @@ pub async fn fetch_relic_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result
 #[tauri::command]
 pub async fn fetch_upgrade_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
     fetch_export_data(app, assets, "ExportUpgrades_en.json").await
+}
+
+/// Fetch regions/node data - returns raw JSON for frontend parsing
+#[tauri::command]
+pub async fn fetch_regions_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+    fetch_export_data(app, assets, "ExportRegions_en.json").await
 }
 
 #[cfg(test)]

@@ -8,6 +8,7 @@ import {
 	WarframePlatform,
 } from "@yumeo0/warframe-worldstate";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArbitrationsPage } from "@/components/app/ArbitrationsPage";
 import { FoundryPage } from "@/components/app/FoundryPage";
 import { MasteryHelperPage } from "@/components/app/MasteryHelperPage";
 import { RelicPlannerPage } from "@/components/app/RelicPlannerPage";
@@ -2389,6 +2390,13 @@ function AppMain() {
 							scannerStatus={relicScannerStatus}
 							scannerEnabled={relicScannerEnabled}
 							scans={relicScans}
+						/>
+					</div>
+				) : activeTab === "arbitrations" ? (
+					<div className="h-full">
+						<ArbitrationsPage
+							eeLogPath={eeLogPath}
+							use24HourClock={use24HourClock}
 						/>
 					</div>
 				) : activeTab === "worldstate" ? (

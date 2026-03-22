@@ -14,6 +14,7 @@ export type AppTab =
 	| "mastery-helper"
 	| "relic-planner"
 	| "relic-scanner"
+	| "arbitrations"
 	| "worldstate"
 	| "settings";
 

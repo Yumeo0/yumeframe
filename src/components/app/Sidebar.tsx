@@ -7,6 +7,7 @@ type Tab =
 	| "mastery-helper"
 	| "relic-planner"
 	| "relic-scanner"
+	| "arbitrations"
 	| "worldstate"
 	| "settings";
 
@@ -142,6 +143,28 @@ export function Sidebar({
 							}}
 						/>
 						<span className="hidden md:inline">Relic Scanner</span>
+					</Button>
+					<Button
+						variant={activeTab === "arbitrations" ? "default" : "ghost"}
+						className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
+						aria-label="Arbitrations"
+						onClick={() => onTabChange("arbitrations")}
+					>
+						<span
+							aria-hidden="true"
+							className={`h-6 w-6 shrink-0 ${activeTab === "arbitrations" ? "bg-primary-foreground" : "bg-foreground"}`}
+							style={{
+								maskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
+								WebkitMaskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
+								maskRepeat: "no-repeat",
+								WebkitMaskRepeat: "no-repeat",
+								maskPosition: "center",
+								WebkitMaskPosition: "center",
+								maskSize: "contain",
+								WebkitMaskSize: "contain",
+							}}
+						/>
+						<span className="hidden md:inline">Arbitrations</span>
 					</Button>
 					<Button
 						variant={activeTab === "worldstate" ? "default" : "ghost"}
