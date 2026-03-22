@@ -23,9 +23,34 @@ function buildTierList(): ArbitrationTierList {
 		}
 	};
 
-	assignTier("S", ["Cinxia", "Casta", "Seimeni", "Callisto", "Alator"]);
-	assignTier("A", ["Sechura", "Hydron", "Helene", "Hyf", "Larzac", "Tyana Pass"]);
-	assignTier("B", ["Taranis", "Odin", "Paimon", "Belenus", "Spear", "Kadesh", "Akkad", "Mithra", "Tessera", "Ose", "Outer Terminus", "Kala-azar"]);
+	assignTier("S", [
+		"Cinxia",
+		"Casta",
+		"Seimeni",
+		"Callisto",
+		"Alator",
+		"Sechura",
+		"Tyana Pass",
+	]);
+	assignTier("A", [
+		"Hydron",
+		"Helene",
+		"Hyf",
+		"Larzac",
+	]);
+	assignTier("B", [
+		"Taranis",
+		"Odin",
+		"Paimon",
+		"Belenus",
+		"Spear",
+		"Kadesh",
+		"Akkad",
+		"Mithra",
+		"Tessera",
+		"Ose",
+		"Outer Terminus",
+		"Kala-azar"]);
 	assignTier("C", [
 		"Sinai",
 		"Sangeru",
