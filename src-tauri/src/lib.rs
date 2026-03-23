@@ -1,6 +1,7 @@
 mod relic_scanner;
 mod warframe_api;
 use tauri::AppHandle;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -19,6 +20,19 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(overlay_window) = window.app_handle().get_webview_window("relic-overlay") {
+                    if let Err(err) = overlay_window.close() {
+                        eprintln!("Failed to close relic overlay window: {err}");
+                    }
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             restart_app,
