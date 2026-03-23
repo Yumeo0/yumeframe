@@ -208,6 +208,13 @@ pub fn detect_ee_log_paths() -> Vec<String> {
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LiveCountPoint {
+    t: f64,
+    val: u32,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ArbitrationLiveStats {
     session_found: bool,
     mission_code: Option<String>,
@@ -218,6 +225,11 @@ pub struct ArbitrationLiveStats {
     rewards_detected: u32,
     drone_spawns: u32,
     drone_kills: u32,
+    enemy_spawns: u32,
+    avg_drone_interval_seconds: Option<f64>,
+    reward_timestamps: Vec<f64>,
+    drone_timestamps: Vec<f64>,
+    live_counts: Vec<LiveCountPoint>,
     enemies_killed: u32,
     revives: u32,
     vitus_essence_pickups: u32,
@@ -238,6 +250,11 @@ impl ArbitrationLiveStats {
             rewards_detected: 0,
             drone_spawns: 0,
             drone_kills: 0,
+            enemy_spawns: 0,
+            avg_drone_interval_seconds: None,
+            reward_timestamps: Vec::new(),
+            drone_timestamps: Vec::new(),
+            live_counts: Vec::new(),
             enemies_killed: 0,
             revives: 0,
             vitus_essence_pickups: 0,
@@ -257,10 +274,17 @@ struct ArbitrationSessionAccumulator {
     rewards_detected: u32,
     drone_spawns: u32,
     drone_kills: u32,
+    enemy_spawns: u32,
     enemies_killed: u32,
     revives: u32,
     vitus_essence_pickups: u32,
     extraction_detected: bool,
+    has_data: bool,
+    last_activity_time: f64,
+    last_reward_time: f64,
+    reward_timestamps: Vec<f64>,
+    drone_timestamps: Vec<f64>,
+    live_counts: Vec<LiveCountPoint>,
 }
 
 impl ArbitrationSessionAccumulator {
@@ -273,10 +297,17 @@ impl ArbitrationSessionAccumulator {
             rewards_detected: 0,
             drone_spawns: 0,
             drone_kills: 0,
+            enemy_spawns: 0,
             enemies_killed: 0,
             revives: 0,
             vitus_essence_pickups: 0,
             extraction_detected: false,
+            has_data: false,
+            last_activity_time: 0.0,
+            last_reward_time: 0.0,
+            reward_timestamps: Vec::new(),
+            drone_timestamps: Vec::new(),
+            live_counts: Vec::new(),
         }
     }
 
@@ -284,6 +315,26 @@ impl ArbitrationSessionAccumulator {
         let duration_seconds = match (self.started_at_log_seconds, self.ended_at_log_seconds) {
             (Some(start), Some(end)) if end > start => (end - start).floor() as u64,
             _ => 0,
+        };
+
+        let avg_drone_interval_seconds = if self.drone_timestamps.len() > 1 {
+            let mut total = 0.0;
+            let mut count = 0usize;
+            for idx in 1..self.drone_timestamps.len() {
+                let delta = self.drone_timestamps[idx] - self.drone_timestamps[idx - 1];
+                if delta > 0.0 {
+                    total += delta;
+                    count += 1;
+                }
+            }
+
+            if count > 0 {
+                Some(total / count as f64)
+            } else {
+                None
+            }
+        } else {
+            None
         };
 
         ArbitrationLiveStats {
@@ -296,6 +347,11 @@ impl ArbitrationSessionAccumulator {
             rewards_detected: self.rewards_detected,
             drone_spawns: self.drone_spawns,
             drone_kills: self.drone_kills,
+            enemy_spawns: self.enemy_spawns,
+            avg_drone_interval_seconds,
+            reward_timestamps: self.reward_timestamps,
+            drone_timestamps: self.drone_timestamps,
+            live_counts: self.live_counts,
             enemies_killed: self.enemies_killed,
             revives: self.revives,
             vitus_essence_pickups: self.vitus_essence_pickups,
@@ -367,25 +423,6 @@ fn parse_log_seconds(line: &str) -> Option<f64> {
     trimmed[..end].parse::<f64>().ok()
 }
 
-fn extract_first_u32(line: &str) -> Option<u32> {
-    let mut start = None;
-    for (idx, ch) in line.char_indices() {
-        if ch.is_ascii_digit() {
-            if start.is_none() {
-                start = Some(idx);
-            }
-        } else if let Some(begin) = start {
-            return line[begin..idx].parse::<u32>().ok();
-        }
-    }
-
-    if let Some(begin) = start {
-        return line[begin..].parse::<u32>().ok();
-    }
-
-    None
-}
-
 fn extract_node_token(line: &str) -> Option<String> {
     for token in line
         .split(|ch: char| !ch.is_ascii_alphanumeric())
@@ -402,29 +439,89 @@ fn extract_node_token(line: &str) -> Option<String> {
     None
 }
 
+fn extract_overlay_mission_name(line: &str) -> Option<String> {
+    const MARKER: &str = "ThemedSquadOverlay.lua: Mission name:";
+    let marker_idx = line.find(MARKER)?;
+    let raw = line[marker_idx + MARKER.len()..].trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    Some(raw.to_string())
+}
+
+fn extract_monitored_ticking_value(line: &str) -> Option<u32> {
+    let marker = "monitoredticking";
+    let lower = line.to_ascii_lowercase();
+    let marker_idx = lower.find(marker)?;
+    let after = &line[marker_idx + marker.len()..];
+
+    let mut start: Option<usize> = None;
+    for (idx, ch) in after.char_indices() {
+        if ch.is_ascii_digit() {
+            if start.is_none() {
+                start = Some(idx);
+            }
+        } else if let Some(begin) = start {
+            return after[begin..idx].parse::<u32>().ok();
+        }
+    }
+
+    if let Some(begin) = start {
+        return after[begin..].parse::<u32>().ok();
+    }
+
+    None
+}
+
 fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
     let mut current: Option<ArbitrationSessionAccumulator> = None;
-    let mut latest_complete: Option<ArbitrationSessionAccumulator> = None;
+    let mut sessions: Vec<ArbitrationSessionAccumulator> = Vec::new();
+
+    // Keep this in sync with the frontend analyzer: reward popup is the round boundary.
+    const REWARD_MARKER: &str = "sys [info]: created /lotus/interface/defensereward.swf";
+    const EXCLUDED_AGENT_MARKERS: [&str; 8] = [
+        "replicant",
+        "rjcrew",
+        "petavatar",
+        "voidclone",
+        "turret",
+        "dropship",
+        "catbrowpetagent",
+        "allyagent",
+    ];
 
     for line in lines {
         let lower = line.to_ascii_lowercase();
         let log_time = parse_log_seconds(line);
 
-        let mentions_arbitration =
-            lower.contains("arbitration") || lower.contains("elitealert");
+        if let Some(mission_name) = extract_overlay_mission_name(line) {
+            if mission_name.to_ascii_lowercase().contains("arbitration") {
+                // Ignore log rewinds/overlaps similarly to the JS parser.
+                if let Some(timestamp) = log_time {
+                    if let Some(existing) = current.as_ref() {
+                        if existing.last_activity_time > 0.0 && timestamp < existing.last_activity_time {
+                            continue;
+                        }
+                    }
+                }
 
-        if mentions_arbitration {
-            if current.is_none() {
-                current = Some(ArbitrationSessionAccumulator::new());
-            }
-            if let Some(session) = current.as_mut() {
-                if session.started_at_log_seconds.is_none() {
-                    session.started_at_log_seconds = log_time;
+                if let Some(previous) = current.take() {
+                    if previous.has_data || previous.mission_code.is_some() {
+                        sessions.push(previous);
+                    }
                 }
-                if session.mission_code.is_none() {
-                    session.mission_code = extract_node_token(line);
+
+                let mut next = ArbitrationSessionAccumulator::new();
+                next.mission_code = Some(mission_name.replace("Arbitration:", "").trim().to_string());
+                next.started_at_log_seconds = log_time;
+                if let Some(timestamp) = log_time {
+                    next.last_activity_time = timestamp;
                 }
+                current = Some(next);
             }
+
+            continue;
         }
 
         if let Some(session) = current.as_mut() {
@@ -432,31 +529,60 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 session.mission_code = extract_node_token(line);
             }
 
-            if lower.contains("round")
-                && (lower.contains("complete") || lower.contains("newround") || lower.contains("new round"))
-            {
-                if let Some(parsed) = extract_first_u32(&lower) {
-                    session.rounds_completed = session.rounds_completed.max(parsed);
-                } else {
+            if let Some(timestamp) = log_time {
+                session.last_activity_time = session.last_activity_time.max(timestamp);
+            }
+
+            if lower.contains(REWARD_MARKER) {
+                let timestamp = log_time.unwrap_or(0.0);
+                if timestamp > 0.0 && timestamp - session.last_reward_time > 30.0 {
                     session.rounds_completed = session.rounds_completed.saturating_add(1);
+                    session.rewards_detected = session.rewards_detected.saturating_add(1);
+                    session.reward_timestamps.push(timestamp);
+                    session.has_data = true;
+                    session.last_reward_time = timestamp;
+                    if session.started_at_log_seconds.is_none() {
+                        session.started_at_log_seconds = Some(timestamp);
+                    }
                 }
             }
 
-            if lower.contains("reward")
-                && (lower.contains("got")
-                    || lower.contains("give")
-                    || lower.contains("added")
-                    || lower.contains("inventory"))
-            {
-                session.rewards_detected = session.rewards_detected.saturating_add(1);
+            if let Some(timestamp) = log_time {
+                if let Some(monitored_value) = extract_monitored_ticking_value(line) {
+                    session.live_counts.push(LiveCountPoint {
+                        t: timestamp,
+                        val: monitored_value,
+                    });
+                }
             }
 
-            if lower.contains("arbitrationdrone") {
+            if lower.contains("onagentcreated") && lower.contains("corpuseliteshielddroneagent") {
+                session.drone_kills = session.drone_kills.saturating_add(1);
+                session.has_data = true;
+                if let Some(timestamp) = log_time {
+                    session.drone_timestamps.push(timestamp);
+                }
+            } else if lower.contains("arbitrationdrone") {
                 if lower.contains("spawn") || lower.contains("created") {
                     session.drone_spawns = session.drone_spawns.saturating_add(1);
                 }
                 if lower.contains("kill") || lower.contains("destroy") || lower.contains("died") {
                     session.drone_kills = session.drone_kills.saturating_add(1);
+                    if let Some(timestamp) = log_time {
+                        session.drone_timestamps.push(timestamp);
+                    }
+                }
+            }
+
+            if lower.contains("onagentcreated") {
+                let is_excluded = EXCLUDED_AGENT_MARKERS
+                    .iter()
+                    .any(|marker| lower.contains(marker));
+                let is_drone_line =
+                    lower.contains("corpuseliteshielddroneagent") || lower.contains("arbitrationdrone");
+
+                if !is_excluded && !is_drone_line {
+                    session.enemy_spawns = session.enemy_spawns.saturating_add(1);
                 }
             }
 
@@ -475,19 +601,28 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
             if lower.contains("extract") {
                 session.extraction_detected = true;
             }
-
-            if lower.contains("commitinventorychangestodb")
-                || lower.contains("mission complete")
-                || lower.contains("end of mission")
-            {
-                session.ended_at_log_seconds = log_time.or(session.ended_at_log_seconds);
-                latest_complete = Some(session.clone());
-                current = None;
-            }
         }
     }
 
-    if let Some(session) = latest_complete {
+    if let Some(previous) = current.take() {
+        if previous.has_data || previous.mission_code.is_some() {
+            sessions.push(previous);
+        }
+    }
+
+    let chosen = sessions
+        .iter()
+        .rev()
+        .find(|session| session.rounds_completed > 0 && session.drone_kills > 20)
+        .cloned()
+        .or_else(|| sessions.last().cloned());
+
+    if let Some(mut session) = chosen {
+        if session.ended_at_log_seconds.is_none() {
+            if session.last_activity_time > 0.0 {
+                session.ended_at_log_seconds = Some(session.last_activity_time);
+            }
+        }
         return session.into_stats(lines.len());
     }
 

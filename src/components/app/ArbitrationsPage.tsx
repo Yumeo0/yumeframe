@@ -1,13 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { resolveNode } from "@yumeo0/warframe-worldstate";
-import { Clock3, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArbitrationAnalyzer } from "@/components/app/ArbitrationAnalyzer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
-	CardDescription,
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
@@ -50,27 +49,8 @@ interface ExportRegionsPayload {
 	ExportRegions?: ExportRegionNode[];
 }
 
-interface ArbitrationLiveStats {
-	sessionFound: boolean;
-	missionCode: string | null;
-	startedAtLogSeconds: number | null;
-	endedAtLogSeconds: number | null;
-	durationSeconds: number;
-	roundsCompleted: number;
-	rewardsDetected: number;
-	droneSpawns: number;
-	droneKills: number;
-	enemiesKilled: number;
-	revives: number;
-	vitusEssencePickups: number;
-	extractionDetected: boolean;
-	linesScanned: number;
-	note: string | null;
-}
-
 const AVAILABLE_TIERS: ArbitrationTier[] = ["S", "A", "B", "C", "D", "F"];
 
-const LIVE_DATA_COMMAND = "fetch_latest_arbitration_stats";
 const WARFRAME_INDEX_COMMAND = "fetch_warframe_index";
 const REGIONS_DATA_COMMAND = "fetch_regions_data";
 const ARBITRATION_ROTATION_SECONDS = 60 * 60;
@@ -151,23 +131,6 @@ function formatNodeLabel(nodeCode: string): string {
 	}
 
 	return compact;
-}
-
-function formatDuration(seconds: number): string {
-	if (seconds <= 0) {
-		return "0m 0s";
-	}
-
-	const total = Math.max(0, Math.floor(seconds));
-	const hours = Math.floor(total / 3600);
-	const minutes = Math.floor((total % 3600) / 60);
-	const remainingSeconds = total % 60;
-
-	if (hours > 0) {
-		return `${hours}h ${minutes}m ${remainingSeconds}s`;
-	}
-
-	return `${minutes}m ${remainingSeconds}s`;
 }
 
 function extractNodeCode(uniqueName: string): string {
@@ -273,9 +236,6 @@ export function ArbitrationsPage({
 	);
 	const [scheduleLoading, setScheduleLoading] = useState(true);
 	const [scheduleError, setScheduleError] = useState<string | null>(null);
-	const [analyzer, setAnalyzer] = useState<ArbitrationLiveStats | null>(null);
-	const [liveLoading, setLiveLoading] = useState(false);
-	const [liveError, setLiveError] = useState<string | null>(null);
 	const [nowMs, setNowMs] = useState(Date.now());
 	const [selectedDays, setSelectedDays] = useState(7);
 	const [selectedTiers, setSelectedTiers] = useState<ArbitrationTier[]>([]);
@@ -481,30 +441,6 @@ export function ArbitrationsPage({
 		};
 	}, []);
 
-	const refreshAnalyzer = useCallback(async () => {
-		setLiveLoading(true);
-		setLiveError(null);
-
-		try {
-			const result = await invoke<ArbitrationLiveStats>(LIVE_DATA_COMMAND, {
-				eeLogPath,
-			});
-			setAnalyzer(result);
-		} catch (error) {
-			const message =
-				error instanceof Error
-					? error.message
-					: "Unknown error while loading live data";
-			setLiveError(message);
-		} finally {
-			setLiveLoading(false);
-		}
-	}, [eeLogPath]);
-
-	useEffect(() => {
-		void refreshAnalyzer();
-	}, [refreshAnalyzer]);
-
 	const scheduleByDay = useMemo(() => {
 		if (schedule.length === 0) {
 			return [];
@@ -556,13 +492,13 @@ export function ArbitrationsPage({
 
 	return (
 		<div className="flex flex-col h-full min-h-0 gap-2">
-			<Tabs defaultValue="schedule" className="flex-1 min-h-0">
+			<Tabs defaultValue="schedule" className="flex flex-col flex-1 min-h-0 overflow-hidden">
 				<TabsList>
 					<TabsTrigger value="schedule">Schedule</TabsTrigger>
 					<TabsTrigger value="analyzer">Analyzer</TabsTrigger>
 				</TabsList>
 
-				<TabsContent value="schedule" className="min-h-0">
+				<TabsContent value="schedule" className="flex-1 min-h-0 overflow-y-auto">
 					<Card className="flex flex-col h-full min-h-0 gap-2 py-4">
 						<CardHeader className="pb-0">
 							<div className="flex items-center justify-between gap-2">
@@ -708,129 +644,11 @@ export function ArbitrationsPage({
 					</Card>
 				</TabsContent>
 
-				<TabsContent value="analyzer" className="min-h-0">
-					<div className="grid grid-cols-1 gap-2 lg:grid-cols-[2fr_1fr]">
-						<Card>
-							<CardHeader className="pb-2">
-								<div className="flex items-center justify-between gap-2">
-									<div>
-										<CardTitle className="text-base">
-											Latest Arbitration Run
-										</CardTitle>
-										<CardDescription>
-											Parsed from the most recent completed session in EE.log
-										</CardDescription>
-									</div>
-									<Button
-										variant="outline"
-										size="sm"
-										onClick={() => void refreshAnalyzer()}
-										disabled={liveLoading}
-									>
-										{liveLoading ? (
-											<RefreshCw className="w-4 h-4 animate-spin" />
-										) : (
-											<RefreshCw className="w-4 h-4" />
-										)}
-										Refresh
-									</Button>
-								</div>
-							</CardHeader>
-							<CardContent>
-								{liveError ? (
-									<p className="text-sm text-destructive">{liveError}</p>
-								) : !analyzer ? (
-									<p className="text-sm text-muted-foreground">
-										Loading live data...
-									</p>
-								) : !analyzer.sessionFound ? (
-									<p className="text-sm text-muted-foreground">
-										No completed arbitration session found yet in the current
-										log window.
-									</p>
-								) : (
-									<div className="space-y-3">
-										<div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">Node</p>
-												<p className="text-sm font-medium">
-													{formatNodeLabel(analyzer.missionCode ?? "")}
-												</p>
-											</div>
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">
-													Duration
-												</p>
-												<p className="text-sm font-medium">
-													{formatDuration(analyzer.durationSeconds)}
-												</p>
-											</div>
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">Rounds</p>
-												<p className="text-sm font-medium">
-													{analyzer.roundsCompleted}
-												</p>
-											</div>
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">Rewards</p>
-												<p className="text-sm font-medium">
-													{analyzer.rewardsDetected}
-												</p>
-											</div>
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">
-													Drone Kills
-												</p>
-												<p className="text-sm font-medium">
-													{analyzer.droneKills}
-												</p>
-											</div>
-											<div className="p-2 border rounded">
-												<p className="text-xs text-muted-foreground">
-													Vitus Pickups
-												</p>
-												<p className="text-sm font-medium">
-													{analyzer.vitusEssencePickups}
-												</p>
-											</div>
-										</div>
-
-										{analyzer.note ? (
-											<p className="text-xs text-muted-foreground">
-												{analyzer.note}
-											</p>
-										) : null}
-									</div>
-								)}
-							</CardContent>
-						</Card>
-
-						<Card>
-							<CardHeader className="pb-2">
-								<CardTitle className="text-base">Parser Info</CardTitle>
-							</CardHeader>
-							<CardContent className="space-y-2 text-sm">
-								<div className="flex items-center gap-2 text-muted-foreground">
-									<Clock3 className="w-4 h-4" />
-									<span>EE.log window parser</span>
-								</div>
-								<p className="text-xs break-all text-muted-foreground">
-									{eeLogPath || "Using detected default EE.log path"}
-								</p>
-								{analyzer ? (
-									<>
-										<p className="text-xs text-muted-foreground">
-											Lines scanned: {analyzer.linesScanned}
-										</p>
-										<p className="text-xs text-muted-foreground">
-											Extraction detected:{" "}
-											{analyzer.extractionDetected ? "Yes" : "No"}
-										</p>
-									</>
-								) : null}
-							</CardContent>
-						</Card>
-					</div>
+				<TabsContent value="analyzer" className="flex-1 min-h-0 overflow-y-auto">
+					<ArbitrationAnalyzer
+						eeLogPath={eeLogPath}
+						formatNodeLabel={formatNodeLabel}
+					/>
 				</TabsContent>
 			</Tabs>
 		</div>
