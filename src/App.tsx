@@ -93,10 +93,6 @@ const RELIC_DAILY_MARKET_CACHE_KEY = "yumeframe.relic.daily.market.cache";
 const RELIC_SCANNER_SETTINGS_CACHE_KEY = "yumeframe.relic.scanner.settings";
 const EE_LOG_PATH_CACHE_KEY = "yumeframe.ee-log.path";
 const RELIC_IMAGE_TEST_PATH_CACHE_KEY = "yumeframe.relic.image-test.path";
-const RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY =
-	"yumeframe.relic.image-test.log-snippet";
-const RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY =
-	"yumeframe.relic.image-test.force-count";
 const DEFAULT_RELIC_SCANNER_HOTKEY = "F11";
 const LEGACY_RELIC_SCANNER_HOTKEY = "F12";
 const EE_LOG_FILE_NAME = "ee.log";
@@ -572,9 +568,6 @@ function AppMain() {
 	const [detectedEeLogPaths, setDetectedEeLogPaths] = useState<string[]>([]);
 	const [eeLogPathPickerWarning, setEeLogPathPickerWarning] = useState("");
 	const [relicImageTestPath, setRelicImageTestPath] = useState("");
-	const [relicImageTestLogSnippet, setRelicImageTestLogSnippet] = useState("");
-	const [relicImageTestForcedPlayerCount, setRelicImageTestForcedPlayerCount] =
-		useState("");
 	const [relicImageTestLoading, setRelicImageTestLoading] = useState(false);
 	const [scannerSettingsLoaded, setScannerSettingsLoaded] = useState(false);
 	const [activeSettingsSection, setActiveSettingsSection] =
@@ -1056,8 +1049,24 @@ function AppMain() {
 	);
 
 	const buildRewardGuessDebug = useCallback(
-		(rewardCandidates: string[]): RewardGuessDebugEntry[] => {
-			return rewardCandidates.map((candidate) => {
+		(
+			rewardCandidates: string[],
+			slotResults?: ScannerEventPayload["slotResults"],
+		): RewardGuessDebugEntry[] => {
+			const candidates = (() => {
+				if (slotResults && slotResults.length > 0) {
+					const fromSlots = slotResults
+						.map((slot) => slot.rewardCandidate?.trim() ?? "")
+						.filter((value) => value.length > 0);
+					if (fromSlots.length > 0) {
+						return fromSlots;
+					}
+				}
+
+				return rewardCandidates;
+			})();
+
+			return candidates.map((candidate) => {
 				const normalizedCandidate = normalizeOcrText(candidate);
 				const guesses = scannerRewardLookup
 					.map((entry) => ({
@@ -1089,7 +1098,9 @@ function AppMain() {
 				payload.slotResults,
 			);
 			const overlayRewards = buildOverlayRewards(rewards);
-			setLatestRewardGuessDebug(buildRewardGuessDebug(rawCandidates));
+			setLatestRewardGuessDebug(
+				buildRewardGuessDebug(rawCandidates, payload.slotResults),
+			);
 			console.debug("[relic-scanner] scan-event", {
 				source: payload.source,
 				triggerDetail: payload.triggerDetail,
@@ -1108,6 +1119,7 @@ function AppMain() {
 				id: `${payload.triggeredAt}-${Math.random().toString(16).slice(2)}`,
 				triggeredAt: payload.triggeredAt,
 				source: payload.source,
+				triggerDetail: payload.triggerDetail,
 				status,
 				rewards,
 				rawCandidates: rawCandidates,
@@ -1585,15 +1597,6 @@ function AppMain() {
 			return;
 		}
 
-		const parsedForcedCount = Number.parseInt(
-			relicImageTestForcedPlayerCount,
-			10,
-		);
-		const forcedPlayerCountHint = Number.isNaN(parsedForcedCount)
-			? undefined
-			: Math.min(4, Math.max(1, parsedForcedCount));
-		const simulatedLogSnippet = relicImageTestLogSnippet.trim();
-
 		setRelicImageTestLoading(true);
 		try {
 			try {
@@ -1605,36 +1608,17 @@ function AppMain() {
 			await invoke("trigger_relic_scan_from_image", {
 				imagePath: relicImageTestPath,
 				source: "image-test",
-				simulatedLogSnippet:
-					simulatedLogSnippet.length > 0 ? simulatedLogSnippet : undefined,
-				forcedPlayerCountHint,
 			});
 		} finally {
 			setRelicImageTestLoading(false);
 		}
-	}, [
-		relicImageTestPath,
-		relicImageTestLogSnippet,
-		relicImageTestForcedPlayerCount,
-	]);
+	}, [relicImageTestPath]);
 
 	useEffect(() => {
 		try {
 			const cachedPath = localStorage.getItem(RELIC_IMAGE_TEST_PATH_CACHE_KEY);
 			if (cachedPath) {
 				setRelicImageTestPath(cachedPath);
-			}
-			const cachedSnippet = localStorage.getItem(
-				RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY,
-			);
-			if (cachedSnippet) {
-				setRelicImageTestLogSnippet(cachedSnippet);
-			}
-			const cachedForcedCount = localStorage.getItem(
-				RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY,
-			);
-			if (cachedForcedCount) {
-				setRelicImageTestForcedPlayerCount(cachedForcedCount);
 			}
 		} catch (err) {
 			console.error("Failed to read relic image test path cache:", err);
@@ -1655,30 +1639,6 @@ function AppMain() {
 			console.error("Failed to persist relic image test path cache:", err);
 		}
 	}, [relicImageTestPath]);
-
-	useEffect(() => {
-		try {
-			if (relicImageTestLogSnippet.trim()) {
-				localStorage.setItem(
-					RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY,
-					relicImageTestLogSnippet,
-				);
-			} else {
-				localStorage.removeItem(RELIC_IMAGE_TEST_LOG_SNIPPET_CACHE_KEY);
-			}
-
-			if (relicImageTestForcedPlayerCount.trim()) {
-				localStorage.setItem(
-					RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY,
-					relicImageTestForcedPlayerCount,
-				);
-			} else {
-				localStorage.removeItem(RELIC_IMAGE_TEST_FORCE_COUNT_CACHE_KEY);
-			}
-		} catch (err) {
-			console.error("Failed to persist relic image test hint cache:", err);
-		}
-	}, [relicImageTestLogSnippet, relicImageTestForcedPlayerCount]);
 
 	useEffect(() => {
 		try {
@@ -1895,13 +1855,16 @@ function AppMain() {
 					newRewards.some((r, i) => r.platinum !== entry.rewards[i]?.platinum)
 				) {
 					changed = true;
-					void emit("relic-scan-overlay", {
-						source: entry.source,
-						triggeredAt: entry.triggeredAt,
-						rewardCandidates: entry.rawCandidates,
-						rewards: overlayRewards,
-						error: entry.error,
-					});
+					// Avoid replaying historical image-test events to the overlay.
+					if (entry.source !== "image-test") {
+						void emit("relic-scan-overlay", {
+							source: entry.source,
+							triggeredAt: entry.triggeredAt,
+							rewardCandidates: entry.rawCandidates,
+							rewards: overlayRewards,
+							error: entry.error,
+						});
+					}
 					return { ...entry, rewards: newRewards };
 				}
 				return entry;
@@ -2487,12 +2450,6 @@ function AppMain() {
 								relicTestImagePath={relicImageTestPath}
 								onRelicTestImagePathChange={setRelicImageTestPath}
 								onRunRelicImageTest={runRelicImageTest}
-								relicTestLogSnippet={relicImageTestLogSnippet}
-								onRelicTestLogSnippetChange={setRelicImageTestLogSnippet}
-								relicTestForcedPlayerCount={relicImageTestForcedPlayerCount}
-								onRelicTestForcedPlayerCountChange={
-									setRelicImageTestForcedPlayerCount
-								}
 								relicImageTestLoading={relicImageTestLoading}
 								latestRewardGuessDebug={latestRewardGuessDebug}
 							/>

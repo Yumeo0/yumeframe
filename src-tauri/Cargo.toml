@@ -25,7 +25,7 @@ serde_json = "1"
 xcap = "0.8.0"
 image = "0.25"
 imageproc = "0.25"
-kreuzberg-tesseract = "4.0.0-rc.22"
+ocr_rs = { package = "ocr-rs", git = "https://github.com/zibo-chen/rust-paddle-ocr.git" }
 global-hotkey = "0.4.2"
 
 # Warframe API helper dependencies

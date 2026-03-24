@@ -3,9 +3,9 @@ use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState};
 use image::imageops::crop_imm;
 use image::{DynamicImage, GrayImage};
 use imageproc::contrast::{threshold, ThresholdType};
-use kreuzberg_tesseract::TesseractAPI;
+use ocr_rs::{OcrEngine, OcrEngineConfig, OcrResult_};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
@@ -25,34 +25,28 @@ const AUTO_DELAY_MODE_ADAPTIVE: &str = "adaptive";
 struct TriggerMarkerDef {
     text: &'static str,
     source: &'static str,
-    priority: u8,
 }
 
 const TRIGGER_MARKERS: [TriggerMarkerDef; 5] = [
     TriggerMarkerDef {
         text: "ProjectionsCountdown",
         source: "auto-early",
-        priority: 10,
     },
     TriggerMarkerDef {
         text: "Pause countdown done",
         source: "auto-early",
-        priority: 20,
     },
     TriggerMarkerDef {
         text: "Client has reward info for all players now",
         source: "auto-early",
-        priority: 30,
     },
     TriggerMarkerDef {
         text: "Got rewards",
         source: "auto-late",
-        priority: 40,
     },
     TriggerMarkerDef {
         text: "Relic timer closed",
         source: "auto-late",
-        priority: 50,
     },
 ];
 
@@ -60,6 +54,7 @@ const PIXEL_REWARD_WIDTH: f32 = 968.0;
 const PIXEL_REWARD_HEIGHT: f32 = 235.0;
 const PIXEL_REWARD_YDISPLAY: f32 = 316.0;
 const PIXEL_REWARD_LINE_HEIGHT: f32 = 48.0;
+const RELIC_REWARD_SCREEN_SHUTDOWN_MARKER: &str = "Relic reward screen shut down";
 
 #[derive(Debug)]
 struct ScannerRuntime {
@@ -74,7 +69,40 @@ struct ScannerRuntime {
 #[derive(Debug)]
 struct RewardExtraction {
     reward_area: DynamicImage,
-    reward_boxes: Vec<DynamicImage>,
+}
+
+#[derive(Debug)]
+struct OcrSlotCluster {
+    x_sum: i64,
+    items: Vec<OcrResult_>,
+}
+
+impl OcrSlotCluster {
+    fn from_item(item: OcrResult_) -> Self {
+        Self {
+            x_sum: ocr_result_center_x(&item) as i64,
+            items: vec![item],
+        }
+    }
+
+    fn center_x(&self) -> i32 {
+        if self.items.is_empty() {
+            0
+        } else {
+            (self.x_sum / self.items.len() as i64) as i32
+        }
+    }
+
+    fn push(&mut self, item: OcrResult_) {
+        self.x_sum += ocr_result_center_x(&item) as i64;
+        self.items.push(item);
+    }
+
+    fn absorb(mut self, mut other: OcrSlotCluster) -> OcrSlotCluster {
+        self.x_sum += other.x_sum;
+        self.items.append(&mut other.items);
+        self
+    }
 }
 
 #[derive(Debug)]
@@ -173,7 +201,6 @@ struct ScanOutput {
 struct DetectedTrigger {
     marker_text: &'static str,
     source: &'static str,
-    priority: u8,
 }
 
 fn now_ms() -> u64 {
@@ -183,25 +210,40 @@ fn now_ms() -> u64 {
     }
 }
 
-fn get_tessdata_dir(app_handle: &AppHandle) -> Result<PathBuf, String> {
+fn get_ocr_model_paths(app_handle: &AppHandle) -> Result<(PathBuf, PathBuf, PathBuf), String> {
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let dev_tessdata = PathBuf::from(manifest_dir).join("tessdata");
-        if dev_tessdata.exists() {
-            return Ok(dev_tessdata);
+        let model_dir = PathBuf::from(manifest_dir).join("models");
+        let det_model = model_dir.join("PP-OCRv5_mobile_det.mnn");
+        let rec_model = model_dir.join("PP-OCRv5_mobile_rec.mnn");
+        let keys_file = model_dir.join("ppocr_keys_v5.txt");
+
+        if det_model.exists() && rec_model.exists() && keys_file.exists() {
+            return Ok((det_model, rec_model, keys_file));
         }
     }
 
     if let Ok(resource_dir) = app_handle.path().resource_dir() {
-        let bundled_tessdata = resource_dir.join("tessdata");
-        if bundled_tessdata.exists() {
-            return Ok(bundled_tessdata);
+        let model_dir = resource_dir.join("models");
+        let det_model = model_dir.join("PP-OCRv5_mobile_det.mnn");
+        let rec_model = model_dir.join("PP-OCRv5_mobile_rec.mnn");
+        let keys_file = model_dir.join("ppocr_keys_v5.txt");
+
+        if det_model.exists() && rec_model.exists() && keys_file.exists() {
+            return Ok((det_model, rec_model, keys_file));
         }
     }
 
     Err(
-        "Tessdata directory not found. Expected src-tauri/tessdata with eng.traineddata"
-            .to_string(),
+        "OCR models not found. Expected src-tauri/models with PP-OCRv5 model files".to_string(),
     )
+}
+
+fn create_ocr_engine(app_handle: &AppHandle) -> Result<OcrEngine, String> {
+    let (det_model, rec_model, keys_file) = get_ocr_model_paths(app_handle)?;
+    let config = OcrEngineConfig::fast();
+
+    OcrEngine::new(det_model, rec_model, keys_file, Some(config))
+        .map_err(|err| format!("Failed to initialize OCR engine: {err}"))
 }
 
 fn preprocess_image(image: &DynamicImage) -> GrayImage {
@@ -252,41 +294,68 @@ fn save_debug_text(
 
 fn perform_ocr_on_image(
     img: &DynamicImage,
-    app_handle: &AppHandle,
-) -> Result<(String, DynamicImage), String> {
+    engine: &OcrEngine,
+) -> Result<(Vec<OcrResult_>, DynamicImage), String> {
     let processed = preprocess_image(img);
     let processed_image = DynamicImage::ImageLuma8(processed);
-    let tessdata_dir = get_tessdata_dir(app_handle)?;
+    let results = engine
+        .recognize(&processed_image)
+        .map_err(|err| format!("Failed to run OCR recognition: {err}"))?;
 
-    let api = TesseractAPI::new();
-    api.init(
-        tessdata_dir
-            .to_str()
-            .ok_or_else(|| "Invalid tessdata path".to_string())?,
-        "eng",
-    )
-    .map_err(|err| format!("Failed to initialize Tesseract: {err}"))?;
-    api.set_variable("tessedit_pageseg_mode", "6")
-        .map_err(|err| format!("Failed to set PSM: {err}"))?;
+    Ok((results, processed_image))
+}
 
-    let rgb_image = processed_image.to_rgb8();
-    let (width, height) = rgb_image.dimensions();
-    let image_data = rgb_image.into_raw();
+fn ocr_result_center_x(result: &OcrResult_) -> i32 {
+    result.bbox.rect.left() + (result.bbox.rect.width() as i32 / 2)
+}
 
-    api.set_image(
-        &image_data,
-        width as i32,
-        height as i32,
-        3,
-        (3 * width) as i32,
-    )
-    .map_err(|err| format!("Failed to set OCR image: {err}"))?;
+fn ocr_result_center_y(result: &OcrResult_) -> i32 {
+    result.bbox.rect.top() + (result.bbox.rect.height() as i32 / 2)
+}
 
-    let text = api
-        .get_utf8_text()
-        .map_err(|err| format!("Failed to read OCR text: {err}"))?;
+fn cluster_ocr_results_by_slot(
+    mut results: Vec<OcrResult_>,
+    reward_area_width: u32,
+) -> Vec<OcrSlotCluster> {
+    results.retain(|result| {
+        !result.text.trim().is_empty() && result.bbox.rect.width() > 0 && result.bbox.rect.height() > 0
+    });
+    results.sort_by_key(ocr_result_center_x);
 
-    Ok((text, processed_image))
+    let mut clusters: Vec<OcrSlotCluster> = Vec::new();
+    let gap_threshold = ((reward_area_width as f32 * 0.11).round() as i32).max(56);
+
+    for result in results {
+        if let Some(last_cluster) = clusters.last_mut() {
+            let distance = (ocr_result_center_x(&result) - last_cluster.center_x()).abs();
+            if distance <= gap_threshold {
+                last_cluster.push(result);
+                continue;
+            }
+        }
+
+        clusters.push(OcrSlotCluster::from_item(result));
+    }
+
+    while clusters.len() > 4 {
+        let mut best_index = 0usize;
+        let mut best_gap = i32::MAX;
+
+        for index in 0..(clusters.len() - 1) {
+            let gap = (clusters[index + 1].center_x() - clusters[index].center_x()).abs();
+            if gap < best_gap {
+                best_gap = gap;
+                best_index = index;
+            }
+        }
+
+        let right = clusters.remove(best_index + 1);
+        let left = clusters.remove(best_index);
+        clusters.insert(best_index, left.absorb(right));
+    }
+
+    clusters.sort_by_key(|cluster| cluster.center_x());
+    clusters
 }
 
 fn normalize_ocr_reward_name(text: &str) -> Option<String> {
@@ -319,80 +388,7 @@ fn is_valid_reward_candidate(candidate: &str) -> bool {
     compact_len >= 6 && alpha_len >= 3
 }
 
-fn projection_ids_from_chunk(chunk: &str) -> Vec<String> {
-    let mut ids = Vec::new();
-
-    for line in chunk.lines() {
-        if !line.contains("VoidProjections:") {
-            continue;
-        }
-
-        for token in line.split(|ch: char| !ch.is_ascii_hexdigit()) {
-            if token.len() == 24 && token.chars().all(|ch| ch.is_ascii_hexdigit()) {
-                ids.push(token.to_ascii_lowercase());
-            }
-        }
-    }
-
-    ids
-}
-
-fn estimate_player_count(participant_seen_at: &HashMap<String, Instant>) -> Option<usize> {
-    let count = participant_seen_at
-        .values()
-        .filter(|observed_at| observed_at.elapsed() <= Duration::from_secs(45))
-        .count();
-
-    if count == 0 {
-        None
-    } else {
-        Some(count.min(4))
-    }
-}
-
-fn estimate_player_count_from_log_snippet(snippet: &str) -> Option<usize> {
-    let unique_ids = projection_ids_from_chunk(snippet)
-        .into_iter()
-        .collect::<HashSet<_>>();
-
-    if unique_ids.is_empty() {
-        None
-    } else {
-        Some(unique_ids.len().min(4))
-    }
-}
-
-fn layout_units_for_slot_count(slot_count: usize) -> &'static [u32] {
-    match slot_count {
-        1 => &[4],
-        2 => &[3, 5],
-        3 => &[2, 4, 6],
-        _ => &[1, 3, 5, 7],
-    }
-}
-
-fn build_reward_boxes_for_layout(reward_area: &DynamicImage, slot_count: usize) -> Vec<DynamicImage> {
-    let slot_height = reward_area.height();
-    let slot_width = (reward_area.width() / 4).max(1);
-    let max_left = reward_area.width().saturating_sub(slot_width);
-
-    layout_units_for_slot_count(slot_count)
-        .iter()
-        .map(|unit| {
-            let center_x = reward_area.width() as f32 * (*unit as f32 / 8.0);
-            let left = (center_x - slot_width as f32 / 2.0)
-                .round()
-                .clamp(0.0, max_left as f32) as u32;
-            let slot = crop_imm(reward_area, left, 0, slot_width, slot_height).to_image();
-            DynamicImage::ImageRgba8(slot)
-        })
-        .collect()
-}
-
-fn extract_reward_boxes(
-    frame: &DynamicImage,
-    preferred_slot_count: Option<usize>,
-) -> Result<RewardExtraction, String> {
+fn extract_reward_area(frame: &DynamicImage) -> Result<RewardExtraction, String> {
     let width = frame.width() as f32;
     let height = frame.height() as f32;
     if width < 400.0 || height < 300.0 {
@@ -430,15 +426,8 @@ fn extract_reward_boxes(
     .to_image();
 
     let reward_area = DynamicImage::ImageRgba8(reward_area);
-    let slot_count = preferred_slot_count
-        .filter(|count| (1..=4).contains(count))
-        .unwrap_or(4);
-    let reward_boxes = build_reward_boxes_for_layout(&reward_area, slot_count);
 
-    Ok(RewardExtraction {
-        reward_area,
-        reward_boxes,
-    })
+    Ok(RewardExtraction { reward_area })
 }
 
 fn detect_triggers(chunk: &str) -> Vec<DetectedTrigger> {
@@ -450,7 +439,6 @@ fn detect_triggers(chunk: &str) -> Vec<DetectedTrigger> {
                 triggers.push(DetectedTrigger {
                     marker_text: marker.text,
                     source: marker.source,
-                    priority: marker.priority,
                 });
             }
         }
@@ -460,10 +448,7 @@ fn detect_triggers(chunk: &str) -> Vec<DetectedTrigger> {
 }
 
 fn pick_trigger(triggers: &[DetectedTrigger]) -> Option<DetectedTrigger> {
-    triggers
-        .iter()
-        .min_by_key(|trigger| trigger.priority)
-        .cloned()
+    triggers.first().cloned()
 }
 
 fn find_warframe_window() -> Result<Window, String> {
@@ -479,19 +464,36 @@ fn find_warframe_window() -> Result<Window, String> {
 }
 
 fn align_overlay_to_warframe_window(window: &tauri::WebviewWindow) -> Result<(), String> {
-    let warframe_window = find_warframe_window()?;
-    let x = warframe_window
-        .x()
-        .map_err(|err| format!("Failed to read Warframe window x: {err}"))?;
-    let y = warframe_window
-        .y()
-        .map_err(|err| format!("Failed to read Warframe window y: {err}"))?;
-    let width = warframe_window
-        .width()
-        .map_err(|err| format!("Failed to read Warframe window width: {err}"))?;
-    let height = warframe_window
-        .height()
-        .map_err(|err| format!("Failed to read Warframe window height: {err}"))?;
+    let (x, y, width, height) = match find_warframe_window() {
+        Ok(warframe_window) => {
+            let x = warframe_window
+                .x()
+                .map_err(|err| format!("Failed to read Warframe window x: {err}"))?;
+            let y = warframe_window
+                .y()
+                .map_err(|err| format!("Failed to read Warframe window y: {err}"))?;
+            let width = warframe_window
+                .width()
+                .map_err(|err| format!("Failed to read Warframe window width: {err}"))?;
+            let height = warframe_window
+                .height()
+                .map_err(|err| format!("Failed to read Warframe window height: {err}"))?;
+            (x, y, width, height)
+        }
+        Err(_) => {
+            // If Warframe is not found (startup/tabbed out), keep overlay on its current display.
+            let monitor = window
+                .current_monitor()
+                .map_err(|err| format!("Failed to resolve current monitor: {err}"))?
+                .ok_or_else(|| "No monitor available for overlay window".to_string())?;
+            (
+                monitor.position().x,
+                monitor.position().y,
+                monitor.size().width,
+                monitor.size().height,
+            )
+        }
+    };
 
     window
         .set_fullscreen(false)
@@ -510,7 +512,6 @@ fn capture_warframe_rewards(
     app: &AppHandle,
     source: &str,
     log_markers: &[String],
-    preferred_slot_count: Option<usize>,
 ) -> Result<ScanOutput, String> {
     let warframe_window = find_warframe_window()?;
 
@@ -519,7 +520,7 @@ fn capture_warframe_rewards(
         .map_err(|err| format!("Failed to capture Warframe window: {err}"))?;
     let image = DynamicImage::ImageRgba8(frame);
 
-    process_reward_image(app, image, source, log_markers, preferred_slot_count)
+    process_reward_image(app, image, source, log_markers)
 }
 
 fn process_reward_image(
@@ -527,7 +528,6 @@ fn process_reward_image(
     image: DynamicImage,
     source: &str,
     log_markers: &[String],
-    preferred_slot_count: Option<usize>,
 ) -> Result<ScanOutput, String> {
     let artifacts = create_scan_debug_artifacts(app, source)?;
     save_debug_image(&artifacts, "00_full_window.png", &image)?;
@@ -540,39 +540,58 @@ fn process_reward_image(
     save_debug_text(
         &artifacts,
         "scan_context.txt",
-        &format!(
-            "source={source}\nlog_markers={marker_text}\npreferred_slot_count={}\n",
-            preferred_slot_count
-                .map(|count| count.to_string())
-                .unwrap_or_else(|| "none".to_string())
-        ),
+        &format!("source={source}\nlog_markers={marker_text}\n"),
     )?;
 
-    let extraction = extract_reward_boxes(&image, preferred_slot_count)?;
+    let extraction = extract_reward_area(&image)?;
     save_debug_image(&artifacts, "01_reward_area.png", &extraction.reward_area)?;
-    let selected_slot_count = extraction.reward_boxes.len();
+    let ocr_engine = create_ocr_engine(app)?;
+    let (ocr_results, thresholded) = perform_ocr_on_image(&extraction.reward_area, &ocr_engine)?;
+    save_debug_image(&artifacts, "02_reward_area_threshold.png", &thresholded)?;
+
+    let ocr_dump = ocr_results
+        .iter()
+        .map(|result| {
+            format!(
+                "text={} | confidence={:.3} | rect=({}, {}, {}, {})",
+                result.text,
+                result.confidence,
+                result.bbox.rect.left(),
+                result.bbox.rect.top(),
+                result.bbox.rect.width(),
+                result.bbox.rect.height()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    save_debug_text(&artifacts, "03_reward_area_ocr_results.txt", &ocr_dump)?;
+
+    let mut slot_clusters = cluster_ocr_results_by_slot(ocr_results, extraction.reward_area.width());
+    for cluster in &mut slot_clusters {
+        cluster.items.sort_by_key(|item| (ocr_result_center_y(item), ocr_result_center_x(item)));
+    }
+
     let mut slot_candidates: Vec<Option<String>> = Vec::new();
     let mut slot_raw_text: Vec<String> = Vec::new();
 
-    for (index, reward_box) in extraction.reward_boxes.iter().enumerate() {
-        save_debug_image(
+    for (index, cluster) in slot_clusters.iter().enumerate() {
+        let raw_text = cluster
+            .items
+            .iter()
+            .map(|item| item.text.trim())
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        save_debug_text(
             &artifacts,
-            &format!("02_slot_{}_raw.png", index + 1),
-            reward_box,
+            &format!("04_slot_{}_ocr.txt", index + 1),
+            &raw_text,
         )?;
 
-        let (text, thresholded) = perform_ocr_on_image(reward_box, app)?;
-        save_debug_image(
-            &artifacts,
-            &format!("03_slot_{}_threshold.png", index + 1),
-            &thresholded,
-        )?;
-        save_debug_text(&artifacts, &format!("04_slot_{}_ocr.txt", index + 1), &text)?;
-
-        slot_raw_text.push(text.clone());
-
+        slot_raw_text.push(raw_text.clone());
         let normalized =
-            normalize_ocr_reward_name(&text).filter(|candidate| is_valid_reward_candidate(candidate));
+            normalize_ocr_reward_name(&raw_text).filter(|candidate| is_valid_reward_candidate(candidate));
         slot_candidates.push(normalized);
     }
 
@@ -580,11 +599,9 @@ fn process_reward_image(
         &artifacts,
         "layout_selection.txt",
         &format!(
-            "selected_layout={}\npreferred_slot_count={}\n",
-            selected_slot_count,
-            preferred_slot_count
-                .map(|count| count.to_string())
-                .unwrap_or_else(|| "none".to_string())
+            "cluster_count={}\nvalid_slot_count={}\n",
+            slot_candidates.len(),
+            slot_candidates.iter().filter(|slot| slot.is_some()).count()
         ),
     )?;
 
@@ -630,7 +647,7 @@ fn process_reward_image(
     Ok(ScanOutput {
         reward_candidates: rewards,
         slot_results,
-        detected_slot_count: valid_slot_indices.len() as u8,
+        detected_slot_count: slot_raw_text.len() as u8,
     })
 }
 
@@ -679,7 +696,7 @@ fn perform_scan(app: &AppHandle, source: &str, log_markers: Vec<String>) {
         return;
     }
 
-    match capture_warframe_rewards(app, source, &log_markers, None) {
+    match capture_warframe_rewards(app, source, &log_markers) {
         Ok(output) => emit_scan_result(app, source, Some(output), log_markers, None, None, None, None),
         Err(err) => emit_scan_result(app, source, None, log_markers, None, None, None, Some(err)),
     }
@@ -687,72 +704,94 @@ fn perform_scan(app: &AppHandle, source: &str, log_markers: Vec<String>) {
     SCAN_IN_FLIGHT.store(false, Ordering::SeqCst);
 }
 
-fn perform_auto_scan(
-    app: &AppHandle,
-    source: &str,
+#[derive(Debug)]
+struct PendingAutoScan {
+    source: String,
     log_markers: Vec<String>,
-    preferred_slot_count: Option<usize>,
-    config: RelicScannerConfig,
     trigger_detail: String,
+    started_at: Instant,
+    last_attempt_at: Option<Instant>,
+    latest_output: Option<ScanOutput>,
+    latest_error: Option<String>,
+}
+
+fn process_pending_auto_scan(
+    app: &AppHandle,
+    pending_auto_scan: &mut Option<PendingAutoScan>,
+    scanner_config: &RelicScannerConfig,
+    saw_reward_screen_shutdown: bool,
 ) {
-    if SCAN_IN_FLIGHT.swap(true, Ordering::SeqCst) {
-        return;
-    }
+    let mut clear_pending = false;
 
-    let delay_mode = config.auto_delay_mode.clone();
+    {
+        let Some(pending) = pending_auto_scan.as_mut() else {
+            return;
+        };
 
-    let (output, error, waited_ms) = if delay_mode == AUTO_DELAY_MODE_ADAPTIVE {
-        let started_at = Instant::now();
-        let mut latest_output: Option<ScanOutput> = None;
-        let mut latest_error: Option<String>;
+        let retry_interval_ms = if scanner_config.auto_delay_mode == AUTO_DELAY_MODE_FIXED {
+            scanner_config.auto_fixed_delay_ms.max(50)
+        } else {
+            scanner_config.auto_adaptive_interval_ms
+        };
 
-        loop {
-            match capture_warframe_rewards(app, source, &log_markers, preferred_slot_count) {
+        let should_attempt = pending
+            .last_attempt_at
+            .map(|last| last.elapsed() >= Duration::from_millis(retry_interval_ms))
+            .unwrap_or(true);
+
+        if should_attempt && !SCAN_IN_FLIGHT.swap(true, Ordering::SeqCst) {
+            match capture_warframe_rewards(app, &pending.source, &pending.log_markers) {
                 Ok(result) => {
                     let has_data = !result.reward_candidates.is_empty();
-                    latest_output = Some(result);
-                    latest_error = None;
+                    pending.latest_output = Some(result);
+                    pending.latest_error = None;
+                    pending.last_attempt_at = Some(Instant::now());
+
                     if has_data {
-                        break;
+                        let waited_ms = pending.started_at.elapsed().as_millis() as u64;
+                        emit_scan_result(
+                            app,
+                            &pending.source,
+                            pending.latest_output.take(),
+                            pending.log_markers.clone(),
+                            Some(scanner_config.auto_delay_mode.clone()),
+                            Some(waited_ms),
+                            Some(pending.trigger_detail.clone()),
+                            None,
+                        );
+                        clear_pending = true;
                     }
                 }
                 Err(err) => {
-                    latest_error = Some(err);
+                    pending.latest_output = None;
+                    pending.latest_error = Some(err);
+                    pending.last_attempt_at = Some(Instant::now());
                 }
             }
 
-            if started_at.elapsed() >= Duration::from_millis(config.auto_adaptive_timeout_ms) {
-                break;
-            }
-
-            thread::sleep(Duration::from_millis(config.auto_adaptive_interval_ms));
+            SCAN_IN_FLIGHT.store(false, Ordering::SeqCst);
         }
 
-        (
-            latest_output,
-            latest_error,
-            started_at.elapsed().as_millis() as u64,
-        )
-    } else {
-        thread::sleep(Duration::from_millis(config.auto_fixed_delay_ms));
-        match capture_warframe_rewards(app, source, &log_markers, preferred_slot_count) {
-            Ok(result) => (Some(result), None, config.auto_fixed_delay_ms),
-            Err(err) => (None, Some(err), config.auto_fixed_delay_ms),
+        if !clear_pending && saw_reward_screen_shutdown {
+            let waited_ms = pending.started_at.elapsed().as_millis() as u64;
+            let completion_detail = format!("{} (closed)", pending.trigger_detail);
+            emit_scan_result(
+                app,
+                &pending.source,
+                pending.latest_output.take(),
+                pending.log_markers.clone(),
+                Some(scanner_config.auto_delay_mode.clone()),
+                Some(waited_ms),
+                Some(completion_detail),
+                pending.latest_error.take(),
+            );
+            clear_pending = true;
         }
-    };
+    }
 
-    emit_scan_result(
-        app,
-        source,
-        output,
-        log_markers,
-        Some(delay_mode),
-        Some(waited_ms),
-        Some(trigger_detail),
-        error,
-    );
-
-    SCAN_IN_FLIGHT.store(false, Ordering::SeqCst);
+    if clear_pending {
+        *pending_auto_scan = None;
+    }
 }
 
 fn spawn_scanner_worker(
@@ -762,104 +801,141 @@ fn spawn_scanner_worker(
     stop_flag: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let mut file = match File::open(&ee_log_path) {
-            Ok(file) => file,
-            Err(err) => {
-                emit_scan_result(
-                    &app,
-                    "auto-late",
-                    None,
-                    Vec::new(),
-                    None,
-                    None,
-                    None,
-                    Some(format!("Failed to open EE.log: {err}")),
-                );
-                return;
-            }
-        };
-
-        let mut offset = file.seek(SeekFrom::End(0)).unwrap_or(0);
+        let mut file: Option<File> = None;
+        let mut offset = 0u64;
+        let mut did_emit_open_error = false;
         let mut marker_last_triggered: HashMap<&'static str, Instant> = HashMap::new();
         let mut last_auto_trigger = Instant::now() - Duration::from_secs(3);
-        let mut participant_seen_at: HashMap<String, Instant> = HashMap::new();
-
+        let mut pending_auto_scan: Option<PendingAutoScan> = None;
+        let mut auto_session_locked = false;
         while !stop_flag.load(Ordering::Relaxed) {
             thread::sleep(Duration::from_millis(350));
 
-            let metadata = match file.metadata() {
-                Ok(metadata) => metadata,
-                Err(_) => continue,
+            if file.is_none() {
+                match File::open(&ee_log_path) {
+                    Ok(mut opened) => {
+                        offset = opened.seek(SeekFrom::End(0)).unwrap_or(0);
+                        file = Some(opened);
+                        did_emit_open_error = false;
+                    }
+                    Err(err) => {
+                        if !did_emit_open_error {
+                            emit_scan_result(
+                                &app,
+                                "auto-late",
+                                None,
+                                Vec::new(),
+                                None,
+                                None,
+                                None,
+                                Some(format!("Failed to open EE.log: {err}")),
+                            );
+                            did_emit_open_error = true;
+                        }
+                        continue;
+                    }
+                }
+            }
+
+            let Some(active_file) = file.as_mut() else {
+                continue;
             };
 
-            let file_len = metadata.len();
+            // Read metadata by path so scanner survives file replacement/rotation.
+            let path_metadata = match fs::metadata(&ee_log_path) {
+                Ok(metadata) => metadata,
+                Err(_) => {
+                    file = None;
+                    continue;
+                }
+            };
+
+            let file_len = path_metadata.len();
             if file_len < offset {
                 offset = 0;
             }
-
-            if file_len == offset {
-                continue;
-            }
-
-            if file.seek(SeekFrom::Start(offset)).is_err() {
-                continue;
-            }
-
             let mut chunk = String::new();
-            if file.read_to_string(&mut chunk).is_err() {
+            if file_len != offset {
+                if active_file.seek(SeekFrom::Start(offset)).is_err() {
+                    file = None;
+                    continue;
+                }
+
+                if active_file.read_to_string(&mut chunk).is_err() {
+                    file = None;
+                    continue;
+                }
+
+                offset = file_len;
+            }
+            let saw_reward_screen_shutdown = chunk.contains(RELIC_REWARD_SCREEN_SHUTDOWN_MARKER);
+            if saw_reward_screen_shutdown {
+                process_pending_auto_scan(
+                    &app,
+                    &mut pending_auto_scan,
+                    &scanner_config,
+                    true,
+                );
+                auto_session_locked = false;
                 continue;
             }
 
-            offset = file_len;
+            if !chunk.is_empty() {
+                let triggers = detect_triggers(&chunk);
+                if let Some(trigger) = pick_trigger(&triggers) {
+                    if pending_auto_scan.is_none() && !auto_session_locked {
+                        if last_auto_trigger.elapsed()
+                            < Duration::from_millis(scanner_config.auto_debounce_ms)
+                        {
+                            process_pending_auto_scan(
+                                &app,
+                                &mut pending_auto_scan,
+                                &scanner_config,
+                                saw_reward_screen_shutdown,
+                            );
+                            continue;
+                        }
 
-            if chunk.is_empty() {
-                continue;
+                        let should_skip_marker = marker_last_triggered
+                            .get(trigger.marker_text)
+                            .map(|instant| {
+                                instant.elapsed()
+                                    < Duration::from_millis(scanner_config.auto_debounce_ms)
+                            })
+                            .unwrap_or(false);
+                        if should_skip_marker {
+                            process_pending_auto_scan(
+                                &app,
+                                &mut pending_auto_scan,
+                                &scanner_config,
+                                saw_reward_screen_shutdown,
+                            );
+                            continue;
+                        }
+
+                        let triggered_at = Instant::now();
+                        marker_last_triggered.insert(trigger.marker_text, triggered_at);
+                        last_auto_trigger = triggered_at;
+
+                        pending_auto_scan = Some(PendingAutoScan {
+                            source: trigger.source.to_string(),
+                            log_markers: vec![trigger.marker_text.to_string()],
+                            trigger_detail: trigger.marker_text.to_string(),
+                            started_at: Instant::now(),
+                            last_attempt_at: None,
+                            latest_output: None,
+                            latest_error: None,
+                        });
+                        auto_session_locked = true;
+                    }
+                }
             }
 
-            let observed_at = Instant::now();
-            for participant_id in projection_ids_from_chunk(&chunk) {
-                participant_seen_at.insert(participant_id, observed_at);
-            }
-            participant_seen_at.retain(|_, seen_at| seen_at.elapsed() <= Duration::from_secs(45));
-
-            let triggers = detect_triggers(&chunk);
-            let Some(trigger) = pick_trigger(&triggers) else {
-                continue;
-            };
-
-            if last_auto_trigger.elapsed()
-                < Duration::from_millis(scanner_config.auto_debounce_ms)
-            {
-                continue;
-            }
-
-            let should_skip_marker = marker_last_triggered
-                .get(trigger.marker_text)
-                .map(|instant| {
-                    instant.elapsed() < Duration::from_millis(scanner_config.auto_debounce_ms)
-                })
-                .unwrap_or(false);
-            if should_skip_marker {
-                continue;
-            }
-
-            let triggered_at = Instant::now();
-            marker_last_triggered.insert(trigger.marker_text, triggered_at);
-            last_auto_trigger = triggered_at;
-
-            let markers = vec![trigger.marker_text.to_string()];
-            let expected_slot_count = estimate_player_count(&participant_seen_at);
-            let trigger_detail = match expected_slot_count {
-                Some(count) => format!("{} (expected_slots={count})", trigger.marker_text),
-                None => trigger.marker_text.to_string(),
-            };
-            perform_auto_scan(
+            process_pending_auto_scan(
                 &app,
-                trigger.source,
-                markers,
-                expected_slot_count,
-                scanner_config.clone(),
-                trigger_detail,
+                &mut pending_auto_scan,
+                &scanner_config,
+                saw_reward_screen_shutdown,
             );
         }
     })
@@ -923,6 +999,9 @@ pub fn start_relic_scanner(
 
     let normalized_hotkey = normalize_hotkey_binding(hotkey.as_deref());
     let normalized_scanner_config = scanner_config.unwrap_or_default().normalized();
+
+    // Validate OCR model availability before starting scanner workers.
+    create_ocr_engine(&app)?;
 
     {
         let runtime = SCANNER_RUNTIME
@@ -1027,18 +1106,14 @@ pub fn trigger_relic_scan_from_image(
             return Err("Image path is empty".to_string());
         }
 
+        let _ = simulated_log_snippet;
+        let _ = forced_player_count_hint;
+
         let trigger_source = source.unwrap_or_else(|| "image-test".to_string());
-        let snippet_hint = simulated_log_snippet
-            .as_deref()
-            .and_then(|snippet| estimate_player_count_from_log_snippet(snippet));
-        let forced_hint = forced_player_count_hint
-            .map(|value| value as usize)
-            .filter(|value| (1..=4).contains(value));
-        let preferred_slot_count = forced_hint.or(snippet_hint);
         let image = image::open(&image_path)
             .map_err(|err| format!("Failed to read image '{}': {err}", image_path))?;
 
-        match process_reward_image(&app, image, &trigger_source, &[], preferred_slot_count) {
+        match process_reward_image(&app, image, &trigger_source, &[]) {
             Ok(reward_candidates) => {
                 emit_scan_result(
                     &app,
@@ -1116,12 +1191,12 @@ mod tests {
     }
 
     #[test]
-    fn prefers_early_trigger_priority() {
+    fn picks_first_detected_trigger() {
         let chunk = "line A: Got rewards\nline B: Pause countdown done";
         let triggers = detect_triggers(chunk);
         let trigger = pick_trigger(&triggers).expect("expected trigger");
-        assert_eq!(trigger.marker_text, "Pause countdown done");
-        assert_eq!(trigger.source, "auto-early");
+        assert_eq!(trigger.marker_text, "Got rewards");
+        assert_eq!(trigger.source, "auto-late");
     }
 
     #[test]

@@ -27,7 +27,21 @@ function statusBadgeVariant(status: RelicScanEntry["status"]) {
 	}
 }
 
-function sourceLabel(source: RelicScanEntry["source"]): string {
+function normalizeTriggerDetail(detail?: string): string | null {
+	if (!detail) {
+		return null;
+	}
+
+	return detail.replace(/\s+\(closed\)$/i, "").trim() || null;
+}
+
+function sourceLabel(scan: RelicScanEntry): string {
+	const normalizedDetail = normalizeTriggerDetail(scan.triggerDetail);
+	if ((scan.source === "auto-early" || scan.source === "auto-late") && normalizedDetail) {
+		return `Auto (${normalizedDetail})`;
+	}
+
+	const source = scan.source;
 	switch (source) {
 		case "auto-early":
 			return "Auto (Early)";
@@ -85,7 +99,7 @@ export function RelicScannerPage({
 								<Badge variant={statusBadgeVariant(latestScan.status)}>
 									{latestScan.status}
 								</Badge>
-								<span>{sourceLabel(latestScan.source)}</span>
+								<span>{sourceLabel(latestScan)}</span>
 								<span>
 									{new Date(latestScan.triggeredAt).toLocaleTimeString()}
 								</span>
@@ -128,7 +142,7 @@ export function RelicScannerPage({
 								>
 									<div className="min-w-0">
 										<p className="text-xs truncate">
-											{sourceLabel(scan.source)}
+											{sourceLabel(scan)}
 										</p>
 										<p className="truncate text-[11px] text-muted-foreground">
 											{scan.rewards.length} reward(s)

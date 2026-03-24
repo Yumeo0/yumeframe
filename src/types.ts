@@ -648,6 +648,7 @@ export interface RelicScanEntry {
 	id: string;
 	triggeredAt: number;
 	source: RelicScanTriggerSource;
+	triggerDetail?: string;
 	status: RelicScanStatus;
 	rewards: RelicScanRewardValue[];
 	rawCandidates: string[];

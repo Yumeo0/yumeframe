@@ -63,10 +63,6 @@ interface SettingsPageProps {
 	relicTestImagePath: string;
 	onRelicTestImagePathChange: (value: string) => void;
 	onRunRelicImageTest: () => Promise<void>;
-	relicTestLogSnippet: string;
-	onRelicTestLogSnippetChange: (value: string) => void;
-	relicTestForcedPlayerCount: string;
-	onRelicTestForcedPlayerCountChange: (value: string) => void;
 	relicImageTestLoading: boolean;
 	latestRewardGuessDebug: Array<{
 		candidate: string;
@@ -122,10 +118,6 @@ export function SettingsPage({
 	relicTestImagePath,
 	onRelicTestImagePathChange,
 	onRunRelicImageTest,
-	relicTestLogSnippet,
-	onRelicTestLogSnippetChange,
-	relicTestForcedPlayerCount,
-	onRelicTestForcedPlayerCountChange,
 	relicImageTestLoading,
 	latestRewardGuessDebug,
 }: SettingsPageProps) {
@@ -142,9 +134,7 @@ export function SettingsPage({
 				<Card>
 					<CardHeader>
 						<CardTitle>General</CardTitle>
-						<CardDescription>
-							General app preferences.
-						</CardDescription>
+						<CardDescription>General app preferences.</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
 						<label className="flex items-center justify-between p-3 border rounded">
@@ -164,7 +154,9 @@ export function SettingsPage({
 						</label>
 						<label className="flex items-center justify-between p-3 border rounded">
 							<div>
-								<p className="text-sm font-medium">Auto-collapse all crafting parts</p>
+								<p className="text-sm font-medium">
+									Auto-collapse all crafting parts
+								</p>
 								<p className="text-xs text-muted-foreground">
 									When opening a tree, collapse all subrecipes by default.
 								</p>
@@ -248,7 +240,10 @@ export function SettingsPage({
 										)
 									}
 								>
-									<SelectTrigger id="scanner-auto-delay-mode" className="w-full">
+									<SelectTrigger
+										id="scanner-auto-delay-mode"
+										className="w-full"
+									>
 										<SelectValue placeholder="Choose delay mode" />
 									</SelectTrigger>
 									<SelectContent>
@@ -258,7 +253,10 @@ export function SettingsPage({
 								</Select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<label htmlFor="scanner-auto-debounce" className="text-sm font-medium">
+								<label
+									htmlFor="scanner-auto-debounce"
+									className="text-sm font-medium"
+								>
 									Trigger debounce (ms)
 								</label>
 								<input
@@ -280,7 +278,10 @@ export function SettingsPage({
 						</div>
 						{relicScannerAutoDelayMode === "fixed" ? (
 							<div className="flex flex-col gap-2">
-								<label htmlFor="scanner-fixed-delay" className="text-sm font-medium">
+								<label
+									htmlFor="scanner-fixed-delay"
+									className="text-sm font-medium"
+								>
 									Fixed auto delay (ms)
 								</label>
 								<input
@@ -302,7 +303,10 @@ export function SettingsPage({
 						) : (
 							<div className="grid gap-3 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
-									<label htmlFor="scanner-adaptive-interval" className="text-sm font-medium">
+									<label
+										htmlFor="scanner-adaptive-interval"
+										className="text-sm font-medium"
+									>
 										Adaptive interval (ms)
 									</label>
 									<input
@@ -322,7 +326,10 @@ export function SettingsPage({
 									/>
 								</div>
 								<div className="flex flex-col gap-2">
-									<label htmlFor="scanner-adaptive-timeout" className="text-sm font-medium">
+									<label
+										htmlFor="scanner-adaptive-timeout"
+										className="text-sm font-medium"
+									>
 										Adaptive timeout (ms)
 									</label>
 									<input
@@ -384,7 +391,10 @@ export function SettingsPage({
 						</label>
 
 						<div className="flex flex-col gap-2">
-							<label htmlFor="inventory-refresh-interval" className="text-sm font-medium">
+							<label
+								htmlFor="inventory-refresh-interval"
+								className="text-sm font-medium"
+							>
 								Refresh interval (seconds)
 							</label>
 							<input
@@ -416,20 +426,23 @@ export function SettingsPage({
 					<CardHeader>
 						<CardTitle>EE.log Path</CardTitle>
 						<CardDescription>
-							Detected on app start. Select a detected path, browse for one,
-							or type manually.
+							Detected on app start. Select a detected path, browse for one, or
+							type manually.
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-3">
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="ee-log-detected-paths">
-								Detected files
-							</Label>
+							<Label htmlFor="ee-log-detected-paths">Detected files</Label>
 							<Select
-								value={detectedEeLogPaths.includes(eeLogPath) ? eeLogPath : undefined}
+								value={
+									detectedEeLogPaths.includes(eeLogPath) ? eeLogPath : undefined
+								}
 								onValueChange={onEeLogPathChange}
 							>
-								<SelectTrigger id="ee-log-detected-paths" className="w-full font-mono">
+								<SelectTrigger
+									id="ee-log-detected-paths"
+									className="w-full font-mono"
+								>
 									<SelectValue
 										placeholder={
 											detectedEeLogPaths.length > 0
@@ -448,9 +461,7 @@ export function SettingsPage({
 							</Select>
 						</div>
 						<div className="flex flex-col gap-2">
-							<Label htmlFor="ee-log-path">
-								Manual path
-							</Label>
+							<Label htmlFor="ee-log-path">Manual path</Label>
 							<input
 								id="ee-log-path"
 								type="text"
@@ -490,7 +501,9 @@ export function SettingsPage({
 							</Button>
 						</div>
 						{eeLogPathPickerWarning ? (
-							<p className="text-xs text-destructive">{eeLogPathPickerWarning}</p>
+							<p className="text-xs text-destructive">
+								{eeLogPathPickerWarning}
+							</p>
 						) : null}
 					</CardContent>
 				</Card>
@@ -507,7 +520,9 @@ export function SettingsPage({
 					<CardContent className="flex flex-col gap-4">
 						<label className="flex items-center justify-between p-3 border rounded">
 							<div>
-								<p className="text-sm font-medium">Show crafting recipe names</p>
+								<p className="text-sm font-medium">
+									Show crafting recipe names
+								</p>
 								<p className="text-xs text-muted-foreground">
 									Displays internal recipe identifiers in the crafting tree.
 								</p>
@@ -536,25 +551,6 @@ export function SettingsPage({
 									placeholder="Path to reward screenshot image"
 									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
 								/>
-								<input
-									type="number"
-									min={1}
-									max={4}
-									value={relicTestForcedPlayerCount}
-									onChange={(event) =>
-										onRelicTestForcedPlayerCountChange(event.target.value)
-									}
-									placeholder="Force player count hint (1-4)"
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
-								/>
-								<textarea
-									value={relicTestLogSnippet}
-									onChange={(event) =>
-										onRelicTestLogSnippetChange(event.target.value)
-									}
-									placeholder="Optional: paste EE.log snippet to simulate VoidProjections player detection"
-									className="w-full min-h-28 px-3 py-2 font-mono text-xs border rounded-md shadow-xs border-input bg-background text-foreground"
-								/>
 								<div className="flex items-center gap-2">
 									<Button
 										type="button"
@@ -571,46 +567,40 @@ export function SettingsPage({
 										Run image test
 									</Button>
 								</div>
-							</div>
-						</div>
 
-						<div className="p-3 border rounded">
-							<p className="text-sm font-medium">Scanner OCR Debug</p>
-							<p className="text-xs text-muted-foreground">
-								Shows each OCR reward token and the top 3 fuzzy-match guesses.
-							</p>
-							{latestRewardGuessDebug.length > 0 ? (
-								<div className="min-w-0 mt-2 space-y-2">
-									{latestRewardGuessDebug.map((entry, index) => (
-										<div
-											key={`${entry.candidate}-${index}`}
-											className="min-w-0 p-2 border rounded bg-muted/30"
-										>
-											<p className="font-mono text-xs text-foreground wrap-break-word">
-												OCR: {entry.candidate}
-											</p>
-											<p className="text-[11px] text-muted-foreground wrap-break-word">
-												normalized: {entry.normalizedCandidate || "(empty)"}
-											</p>
-											<ul className="mt-1 space-y-1 text-[11px] font-mono text-muted-foreground">
-												{entry.guesses.map((guess) => (
-													<li
-														key={`${entry.candidate}-${guess.rewardName}`}
-														className="wrap-break-word"
-													>
-														{guess.displayName} (dist {guess.distance})
-													</li>
-												))}
-											</ul>
-										</div>
-									))}
-								</div>
-							) : (
-								<p className="mt-2 text-sm text-muted-foreground">
-									No scanner OCR debug data yet. Run a manual scan, auto scan,
-									or image test.
-								</p>
-							)}
+								{latestRewardGuessDebug.length > 0 ? (
+									<div className="min-w-0 mt-2 space-y-2">
+										{latestRewardGuessDebug.map((entry, index) => (
+											<div
+												key={`${entry.candidate}-${index}`}
+												className="min-w-0 p-2 border rounded bg-muted/30"
+											>
+												<p className="font-mono text-xs text-foreground wrap-break-word">
+													OCR: {entry.candidate}
+												</p>
+												<p className="text-[11px] text-muted-foreground wrap-break-word">
+													normalized: {entry.normalizedCandidate || "(empty)"}
+												</p>
+												<ul className="mt-1 space-y-1 text-[11px] font-mono text-muted-foreground">
+													{entry.guesses.map((guess) => (
+														<li
+															key={`${entry.candidate}-${guess.rewardName}`}
+															className="wrap-break-word"
+														>
+															{guess.displayName} (dist {guess.distance})
+														</li>
+													))}
+												</ul>
+											</div>
+										))}
+									</div>
+								) : (
+									<p className="mt-2 text-sm text-muted-foreground">
+										No scanner OCR debug data yet. Run a manual scan, auto scan,
+										or image test.
+									</p>
+								)}
+							</div>
 						</div>
 					</CardContent>
 				</Card>
@@ -694,7 +684,8 @@ export function SettingsPage({
 								</ScrollArea>
 							) : (
 								<p className="text-sm text-muted-foreground">
-									No inventory loaded. Click Refresh Inventory in the sidebar to load.
+									No inventory loaded. Click Refresh Inventory in the sidebar to
+									load.
 								</p>
 							)}
 						</div>
