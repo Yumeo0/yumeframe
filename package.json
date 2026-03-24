@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 tauri",
     "generate:icons": "bunx tauri icon ./public/icon.webp -o ./src-tauri/icons",
-    "release:tag": "bun run scripts/create-release-tag.ts"
+    "release": "bun run scripts/create-release.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
