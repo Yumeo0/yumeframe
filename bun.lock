@@ -11,7 +11,7 @@
         "@tauri-apps/plugin-dialog": "~2",
         "@tauri-apps/plugin-http": "~2",
         "@tauri-apps/plugin-opener": "^2.5.3",
-        "@yumeo0/warframe-worldstate": "file:./packages/warframe-worldstate",
+        "@yumeo0/warframe-worldstate": "github:Yumeo0/warframe-worldstate",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "lucide-react": "^0.574.0",
@@ -519,7 +519,7 @@
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@5.1.4", "", { "dependencies": { "@babel/core": "^7.29.0", "@babel/plugin-transform-react-jsx-self": "^7.27.1", "@babel/plugin-transform-react-jsx-source": "^7.27.1", "@rolldown/pluginutils": "1.0.0-rc.3", "@types/babel__core": "^7.20.5", "react-refresh": "^0.18.0" }, "peerDependencies": { "vite": "^4.2.0 || ^5.0.0 || ^6.0.0 || ^7.0.0" } }, "sha512-VIcFLdRi/VYRU8OL/puL7QXMYafHmqOnwTZY50U1JPlCNj30PxCMx65c494b1K9be9hX83KVt0+gTEwTWLqToA=="],
 
-    "@yumeo0/warframe-worldstate": ["@yumeo0/warframe-worldstate@file:packages/warframe-worldstate", { "devDependencies": { "typescript": "^5.9.3" } }],
+    "@yumeo0/warframe-worldstate": ["@yumeo0/warframe-worldstate@github:Yumeo0/warframe-worldstate#06b114d", {}, "Yumeo0-warframe-worldstate-06b114d", "sha512-3muMyJXouwhWrjtjngQcs29eoc4DT+oXYeKntWFYaapv1VHvM+aAfgJmA6SnSPTmO3a05FUgizMGYZXfv2R8KA=="],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 

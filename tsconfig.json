@@ -22,8 +22,7 @@
     
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@yumeo0/warframe-worldstate": ["./packages/warframe-worldstate/src/index.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src"],

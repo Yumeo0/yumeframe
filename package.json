@@ -18,7 +18,7 @@
     "@tauri-apps/plugin-dialog": "~2",
     "@tauri-apps/plugin-http": "~2",
     "@tauri-apps/plugin-opener": "^2.5.3",
-    "@yumeo0/warframe-worldstate": "file:./packages/warframe-worldstate",
+    "@yumeo0/warframe-worldstate": "github:Yumeo0/warframe-worldstate",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.574.0",
