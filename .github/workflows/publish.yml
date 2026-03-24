@@ -3,7 +3,7 @@ name: publish
 on:
   push:
     tags:
-      - app-v*
+      - v*
   workflow_dispatch:
 
 permissions:
@@ -77,9 +77,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         with:
-          tagName: app-v__VERSION__
-          releaseName: App v__VERSION__
-          releaseBody: See the assets to download this version and install.
+          tagName: v__VERSION__
+          releaseName: YumeFrame v__VERSION__
+          releaseBody: |
+            ## Downloads
+
+            | Platform | File |
+            |----------|------|
+            | Linux (RPM) | [YumeFrame-__VERSION__-1.x86_64.rpm](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/YumeFrame-__VERSION__-1.x86_64.rpm) |
+            | Linux (AppImage) | [YumeFrame___VERSION___amd64.AppImage](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/YumeFrame___VERSION___amd64.AppImage) |
+            | Linux (DEB) | [YumeFrame___VERSION___amd64.deb](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/YumeFrame___VERSION___amd64.deb) |
+            | Windows (EXE) | [YumeFrame___VERSION___x64-setup.exe](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/YumeFrame___VERSION___x64-setup.exe) |
+            | Windows (MSI) | [YumeFrame___VERSION___x64_en-US.msi](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/YumeFrame___VERSION___x64_en-US.msi) |
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

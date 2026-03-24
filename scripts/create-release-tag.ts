@@ -20,7 +20,7 @@ if (!version) {
 	process.exit(1);
 }
 
-const prefix = process.env.RELEASE_TAG_PREFIX || "app-v";
+const prefix = process.env.RELEASE_TAG_PREFIX || "v";
 const remote = process.env.RELEASE_REMOTE || "origin";
 const tag = `${prefix}${version}`;
 
