@@ -184,11 +184,21 @@ writeFileSync(
 writeFileSync(cargoTomlPath, nextCargoToml, "utf8");
 
 console.log(`Bumped version: ${baseVersion} -> ${nextVersion}`);
+console.log("Running tauri build...");
+const buildResult = spawnSync("bun", ["run", "tauri", "build"], {
+	stdio: "inherit",
+	encoding: "utf8",
+});
+if (buildResult.status !== 0) {
+	process.exit(buildResult.status ?? 1);
+}
+
 runGit([
 	"add",
 	"package.json",
 	"src-tauri/tauri.conf.json",
 	"src-tauri/Cargo.toml",
+	"src-tauri/Cargo.lock",
 ]);
 runGit(["commit", "-m", `release: ${tag}`]);
 
