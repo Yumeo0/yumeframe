@@ -226,7 +226,7 @@ export function MasteryHelperPage() {
 							<img
 								src={masteryIconSrc}
 								alt={`Mastery rank ${summary.masteryRank}`}
-								className="object-contain w-20 h-20"
+								className="object-contain size-20"
 							/>
 							<div className="absolute inset-0 flex items-end justify-center pb-1 -bottom-2">
 								<span className="rounded bg-background/80 px-1.5 text-sm font-semibold">
@@ -260,7 +260,7 @@ export function MasteryHelperPage() {
 							className={`group flex w-full items-center justify-between text-left py-3`}
 						>
 							<CardTitle>Mastery XP by Category</CardTitle>
-							<ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+							<ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" />
 						</CollapsibleTrigger>
 					</CardHeader>
 					<CollapsibleContent>
@@ -395,7 +395,7 @@ export function MasteryHelperPage() {
 												<img
 													src={item.imageUrl}
 													alt={item.name}
-													className="object-cover w-16 h-16 rounded-md"
+													className="object-cover size-16 rounded-md"
 												/>
 												<div className="flex-1 min-w-0">
 													<p className="font-semibold truncate">{item.name}</p>

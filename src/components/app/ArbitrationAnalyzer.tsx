@@ -182,7 +182,9 @@ export function ArbitrationAnalyzer({
 
 		const actualVitus = Number.parseFloat(actualVitusInput);
 		const vitusPerMinute =
-			Number.isFinite(actualVitus) && actualVitus >= 0 && analyzer.durationSeconds > 0
+			Number.isFinite(actualVitus) &&
+			actualVitus >= 0 &&
+			analyzer.durationSeconds > 0
 				? actualVitus / (analyzer.durationSeconds / 60)
 				: null;
 
@@ -222,7 +224,8 @@ export function ArbitrationAnalyzer({
 				const hueStart = 100;
 				const hueStep = isDefense ? 15 : 25;
 				const hue = Math.max(0, hueStart - index * hueStep);
-				const lightness = hue === 0 && index > saturationBuckets.length / 2 ? 45 : 50;
+				const lightness =
+					hue === 0 && index > saturationBuckets.length / 2 ? 45 : 50;
 
 				return {
 					label,
@@ -306,7 +309,8 @@ export function ArbitrationAnalyzer({
 
 		const dpmAverage =
 			dpmSeries.length > 0
-				? dpmSeries.reduce((sum, point) => sum + point.dpm, 0) / dpmSeries.length
+				? dpmSeries.reduce((sum, point) => sum + point.dpm, 0) /
+					dpmSeries.length
 				: null;
 		const dpmMinFloor =
 			dpmSeries.length > 0
@@ -348,9 +352,9 @@ export function ArbitrationAnalyzer({
 							disabled={liveLoading}
 						>
 							{liveLoading ? (
-								<RefreshCw className="w-4 h-4 animate-spin" />
+								<RefreshCw data-icon="inline-start" className="animate-spin" />
 							) : (
-								<RefreshCw className="w-4 h-4" />
+								<RefreshCw data-icon="inline-start" />
 							)}
 							Refresh
 						</Button>
@@ -360,21 +364,30 @@ export function ArbitrationAnalyzer({
 					{liveError ? (
 						<p className="text-sm text-destructive">{liveError}</p>
 					) : !analyzer ? (
-						<p className="text-sm text-muted-foreground">Loading live data...</p>
+						<p className="text-sm text-muted-foreground">
+							Loading live data...
+						</p>
 					) : !analyzer.sessionFound ? (
 						<p className="text-sm text-muted-foreground">
-							No completed arbitration session found yet in the current log window.
+							No completed arbitration session found yet in the current log
+							window.
 						</p>
 					) : (
 						<ScrollArea className="flex-1 min-h-0">
 							<div className="flex flex-col gap-3 pb-2 pr-1">
 								<div className="grid grid-cols-1 gap-2 md:grid-cols-3 max-h-72">
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Total Enemies Spawned</p>
-										<p className="text-sm font-medium">{derived?.totalEnemies ?? 0}</p>
+										<p className="text-xs text-muted-foreground">
+											Total Enemies Spawned
+										</p>
+										<p className="text-sm font-medium">
+											{derived?.totalEnemies ?? 0}
+										</p>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Kills / Drone</p>
+										<p className="text-xs text-muted-foreground">
+											Kills / Drone
+										</p>
 										<p className="text-sm font-medium">
 											{derived?.killsPerDrone !== null &&
 											derived?.killsPerDrone !== undefined
@@ -383,7 +396,9 @@ export function ArbitrationAnalyzer({
 										</p>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Avg Drone Interval</p>
+										<p className="text-xs text-muted-foreground">
+											Avg Drone Interval
+										</p>
 										<p className="text-sm font-medium">
 											{analyzer.avgDroneIntervalSeconds !== null
 												? `${analyzer.avgDroneIntervalSeconds.toFixed(2)}s`
@@ -392,18 +407,24 @@ export function ArbitrationAnalyzer({
 									</div>
 									<div className="p-2 border rounded">
 										<p className="text-xs text-muted-foreground">Drone Kills</p>
-										<p className="text-sm font-medium">{derived?.effectiveDroneKills ?? analyzer.droneKills}</p>
+										<p className="text-sm font-medium">
+											{derived?.effectiveDroneKills ?? analyzer.droneKills}
+										</p>
 										<SelectSeparator />
 										<Input
 											type="number"
 											min={0}
 											placeholder="Enter actual drones"
 											value={actualDroneInput}
-											onChange={(event) => setActualDroneInput(event.target.value)}
+											onChange={(event) =>
+												setActualDroneInput(event.target.value)
+											}
 										/>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Vitus / Minute</p>
+										<p className="text-xs text-muted-foreground">
+											Vitus / Minute
+										</p>
 										<p className="text-sm font-medium">
 											{derived?.vitusPerMinute !== null &&
 											derived?.vitusPerMinute !== undefined
@@ -416,11 +437,15 @@ export function ArbitrationAnalyzer({
 											min={0}
 											placeholder="Enter actual Vitus"
 											value={actualVitusInput}
-											onChange={(event) => setActualVitusInput(event.target.value)}
+											onChange={(event) =>
+												setActualVitusInput(event.target.value)
+											}
 										/>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Total Duration</p>
+										<p className="text-xs text-muted-foreground">
+											Total Duration
+										</p>
 										<p className="text-sm font-medium">
 											{formatDuration(analyzer.durationSeconds)}
 										</p>
@@ -435,30 +460,43 @@ export function ArbitrationAnalyzer({
 								<div className="grid min-h-0 grid-cols-1 gap-2 auto-rows-fr xl:grid-cols-2">
 									<Card className="flex flex-col min-h-0 overflow-hidden h-128">
 										<CardHeader>
-											<CardTitle className="text-sm">Expected Vitus Probability</CardTitle>
-                                            <p className="text-xs text-muted-foreground">
-                                                Assuming 100% pickup rate, all buffs, and retriever mod active.
-                                            </p>
+											<CardTitle className="text-sm">
+												Expected Vitus Probability
+											</CardTitle>
+											<p className="text-xs text-muted-foreground">
+												Assuming 100% pickup rate, all buffs, and retriever mod
+												active.
+											</p>
 										</CardHeader>
 										<CardContent className="flex flex-1 min-h-0 overflow-hidden">
 											<ScrollArea className="flex-1 min-h-0">
-												<div className="pr-1 space-y-2 text-sm">
-														<div
-															className="grid items-center grid-cols-3"
-														>
-															<span className="text-muted-foreground">Chance</span>
-															<span className="text-muted-foreground">Total Vitus</span>
-															<span className="text-muted-foreground">Luck Level</span>
-														</div>
-                                                        <SelectSeparator />
+												<div className="flex flex-col gap-2 pr-1 text-sm">
+													<div className="grid items-center grid-cols-3">
+														<span className="text-muted-foreground">
+															Chance
+														</span>
+														<span className="text-muted-foreground">
+															Total Vitus
+														</span>
+														<span className="text-muted-foreground">
+															Luck Level
+														</span>
+													</div>
+													<SelectSeparator />
 													{derived?.scenarios.map((scenario) => (
 														<div
 															key={scenario.desc}
 															className="grid items-center grid-cols-3"
 														>
-															<span className="text-muted-foreground">{scenario.prob}</span>
-															<span className="font-medium">{scenario.score}</span>
-															<span className="text-muted-foreground">{scenario.desc}</span>
+															<span className="text-muted-foreground">
+																{scenario.prob}
+															</span>
+															<span className="font-medium">
+																{scenario.score}
+															</span>
+															<span className="text-muted-foreground">
+																{scenario.desc}
+															</span>
 														</div>
 													))}
 												</div>
@@ -468,16 +506,22 @@ export function ArbitrationAnalyzer({
 
 									<Card className="flex flex-col min-h-0 overflow-hidden h-128">
 										<CardHeader>
-											<CardTitle className="text-sm">Enemy Saturation</CardTitle>
+											<CardTitle className="text-sm">
+												Enemy Saturation
+											</CardTitle>
 											<p className="text-xs text-muted-foreground">
 												Percent of time spent at different enemy counts.
 											</p>
 										</CardHeader>
 										<CardContent className="flex flex-col flex-1 min-h-0">
-											{derived?.saturationData && derived.saturationData.length > 0 ? (
+											{derived?.saturationData &&
+											derived.saturationData.length > 0 ? (
 												<div className="flex-1 min-h-0">
 													<ResponsiveContainer width="100%" height="100%">
-														<BarChart data={derived.saturationData} layout="vertical">
+														<BarChart
+															data={derived.saturationData}
+															layout="vertical"
+														>
 															<CartesianGrid
 																strokeDasharray="3 3"
 																stroke="hsl(var(--muted-foreground) / 0.2)"
@@ -517,7 +561,9 @@ export function ArbitrationAnalyzer({
 																<LabelList
 																	dataKey="percent"
 																	position="right"
-																	formatter={(value) => `${Number(value ?? 0).toFixed(1)}%`}
+																	formatter={(value) =>
+																		`${Number(value ?? 0).toFixed(1)}%`
+																	}
 																	fill="#fafafa"
 																	fontSize={11}
 																/>
@@ -534,12 +580,16 @@ export function ArbitrationAnalyzer({
 												</p>
 											)}
 											<p className="mt-2 text-xs text-muted-foreground">
-												% of total time spent with <span className="font-bold text-foreground">15</span> or more enemies alive: 
+												% of total time spent with{" "}
+												<span className="font-bold text-foreground">15</span> or
+												more enemies alive:
 											</p>
 											<p
 												className="mt-2 text-sm font-semibold"
 												style={{
-													color: getGradientColor(derived?.thresholdPercent ?? 0),
+													color: getGradientColor(
+														derived?.thresholdPercent ?? 0,
+													),
 												}}
 											>
 												{derived?.thresholdPercent.toFixed(1)}%
@@ -549,7 +599,9 @@ export function ArbitrationAnalyzer({
 
 									<Card className="flex flex-col min-h-0 overflow-hidden h-128">
 										<CardHeader>
-											<CardTitle className="text-sm">Drones Per Minute</CardTitle>
+											<CardTitle className="text-sm">
+												Drones Per Minute
+											</CardTitle>
 										</CardHeader>
 										<CardContent className="flex flex-1 min-h-0">
 											{derived?.dpmSeries && derived.dpmSeries.length > 1 ? (
@@ -557,7 +609,12 @@ export function ArbitrationAnalyzer({
 													<ResponsiveContainer width="100%" height="100%">
 														<LineChart
 															data={derived.dpmSeries}
-															margin={{ top: 10, right: 20, left: 2, bottom: 4 }}
+															margin={{
+																top: 10,
+																right: 20,
+																left: 2,
+																bottom: 4,
+															}}
 														>
 															<CartesianGrid
 																strokeDasharray="3 3"
@@ -571,10 +628,7 @@ export function ArbitrationAnalyzer({
 															<YAxis
 																tick={{ fontSize: 11 }}
 																width={34}
-																domain={[
-																	derived.dpmMinFloor ?? 0,
-																	"auto",
-																]}
+																domain={[derived.dpmMinFloor ?? 0, "auto"]}
 															/>
 															<Tooltip
 																formatter={(value) => [
@@ -609,8 +663,16 @@ export function ArbitrationAnalyzer({
 																stroke="#ffcc33"
 																strokeOpacity={1}
 																strokeWidth={3}
-																dot={{ r: 3, fill: "#ffcc33", stroke: "#ffcc33" }}
-																activeDot={{ r: 5, fill: "#ffe082", stroke: "#ffe082" }}
+																dot={{
+																	r: 3,
+																	fill: "#ffcc33",
+																	stroke: "#ffcc33",
+																}}
+																activeDot={{
+																	r: 5,
+																	fill: "#ffe082",
+																	stroke: "#ffe082",
+																}}
 																connectNulls
 																isAnimationActive={false}
 															/>
@@ -627,22 +689,31 @@ export function ArbitrationAnalyzer({
 
 									<Card className="flex flex-col min-h-0 overflow-hidden h-128">
 										<CardHeader>
-											<CardTitle className="text-sm">Drones Per Rotation</CardTitle>
+											<CardTitle className="text-sm">
+												Drones Per Rotation
+											</CardTitle>
 											<p className="text-xs text-muted-foreground">
-												Colors represent relative performance: Red (lowest) - Green (highest).
+												Colors represent relative performance: Red (lowest) -
+												Green (highest).
 											</p>
 										</CardHeader>
 										<CardContent className="flex flex-1 min-h-0">
-											{derived?.dronesPerRotation && derived.dronesPerRotation.length > 0 ? (
+											{derived?.dronesPerRotation &&
+											derived.dronesPerRotation.length > 0 ? (
 												<ScrollArea className="flex-1 min-h-0">
-													<ul className="pr-1 space-y-1">
+													<ul className="flex flex-col gap-1 pr-1">
 														{derived.dronesPerRotation.map((entry) => (
 															<li
 																key={entry.rotation}
 																className="flex items-center justify-between px-2 py-1 text-sm border rounded"
 															>
-																<span className="text-muted-foreground">Round {entry.rotation}</span>
-																<span style={{ color: entry.fill }} className="font-semibold">
+																<span className="text-muted-foreground">
+																	Round {entry.rotation}
+																</span>
+																<span
+																	style={{ color: entry.fill }}
+																	className="font-semibold"
+																>
 																	{entry.count}
 																</span>
 															</li>
@@ -650,14 +721,18 @@ export function ArbitrationAnalyzer({
 													</ul>
 												</ScrollArea>
 											) : (
-												<p className="text-xs text-muted-foreground">No rotation data available.</p>
+												<p className="text-xs text-muted-foreground">
+													No rotation data available.
+												</p>
 											)}
 										</CardContent>
 									</Card>
 								</div>
 
 								{analyzer.note ? (
-									<p className="text-xs text-muted-foreground">{analyzer.note}</p>
+									<p className="text-xs text-muted-foreground">
+										{analyzer.note}
+									</p>
 								) : null}
 							</div>
 						</ScrollArea>

@@ -256,7 +256,7 @@ export function RelicOverlayWindow() {
 						})()}
 					</div>
 				) : payload ? (
-					<div className="mt-2 space-y-1">
+					<div className="mt-2 flex flex-col gap-1">
 						<p className="text-base text-white/75">No rewards resolved for this scan.</p>
 						{payload.rewardCandidates?.length ? (
 							<p className="font-mono text-sm truncate text-white/60">

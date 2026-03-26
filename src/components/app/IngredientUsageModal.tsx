@@ -82,7 +82,7 @@ export function IngredientUsageModal({
 											<img
 												src={targetItem.imageUrl}
 												alt={targetItem.displayName}
-												className="h-12 w-12 rounded object-cover"
+												className="size-12 rounded object-cover"
 											/>
 											<div className="min-w-0">
 												<p className="truncate text-sm font-medium">

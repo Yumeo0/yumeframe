@@ -39,7 +39,7 @@ export function Sidebar({
 			<div className="flex items-center justify-center gap-3 px-2 py-3 mb-4 md:justify-start">
 				<span
 					aria-hidden="true"
-					className={`h-8 w-8 shrink-0 bg-foreground`}
+					className={`size-8 shrink-0 bg-foreground`}
 					style={{
 						maskImage: 'url("/icons/icon_warframe.svg")',
 						WebkitMaskImage: 'url("/icons/icon_warframe.svg")',
@@ -55,7 +55,7 @@ export function Sidebar({
 			</div>
 
 			<nav className="flex flex-col justify-between h-full gap-4">
-				<div className="space-y-2">
+				<div className="flex flex-col gap-2">
 					<Button
 						variant={activeTab === "foundry" ? "default" : "ghost"}
 						className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
@@ -64,7 +64,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "foundry" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "foundry" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_foundry.svg")',
 								WebkitMaskImage: 'url("/icons/icon_foundry.svg")',
@@ -86,7 +86,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "mastery-helper" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "mastery-helper" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_mastery.svg")',
 								WebkitMaskImage: 'url("/icons/icon_mastery.svg")',
@@ -108,7 +108,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "relic-planner" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "relic-planner" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_relic.svg")',
 								WebkitMaskImage: 'url("/icons/icon_relic.svg")',
@@ -130,7 +130,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "relic-scanner" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "relic-scanner" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_reactant.svg")',
 								WebkitMaskImage: 'url("/icons/icon_reactant.svg")',
@@ -152,7 +152,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "arbitrations" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "arbitrations" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
 								WebkitMaskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
@@ -174,7 +174,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "worldstate" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "worldstate" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_appearance.svg")',
 								WebkitMaskImage: 'url("/icons/icon_appearance.svg")',
@@ -189,7 +189,7 @@ export function Sidebar({
 						<span className="hidden md:inline">Worldstate</span>
 					</Button>
 				</div>
-				<div className="space-y-2">
+				<div className="flex flex-col gap-2">
 					<p className="hidden px-3 text-xs text-muted-foreground md:block">
 						Last refresh: {lastRefreshLabel}
 					</p>
@@ -205,9 +205,9 @@ export function Sidebar({
 						className="justify-center w-full gap-2 px-2 md:justify-start md:px-3"
 					>
 						{refreshLoading ? (
-							<Loader2 className="w-4 h-4 animate-spin" />
+							<Loader2 data-icon="inline-start" className="animate-spin" />
 						) : (
-							<RefreshCw className="w-4 h-4" />
+							<RefreshCw data-icon="inline-start" />
 						)}
 						<span className="hidden md:inline">
 							{refreshLoading ? "Loading..." : "Refresh Inventory"}
@@ -221,7 +221,7 @@ export function Sidebar({
 					>
 						<span
 							aria-hidden="true"
-							className={`h-6 w-6 shrink-0 ${activeTab === "settings" ? "bg-primary-foreground" : "bg-foreground"}`}
+							className={`size-6 shrink-0 ${activeTab === "settings" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
 								maskImage: 'url("/icons/icon_settings.svg")',
 								WebkitMaskImage: 'url("/icons/icon_settings.svg")',

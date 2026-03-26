@@ -11,11 +11,22 @@ import {
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import {
 	isCompanionMastered,
 	isWarframeMastered,
 	isWeaponMastered,
 } from "@/lib/mastery.utils";
-import { calculateExpectedDucats, calculateExpectedPlatinum } from "@/lib/relics.utils";
+import {
+	calculateExpectedDucats,
+	calculateExpectedPlatinum,
+} from "@/lib/relics.utils";
 import {
 	normalizeMarketName,
 	normalizeStoreItemPath,
@@ -95,7 +106,11 @@ function getSingleRollRewardProbabilities(
 	});
 }
 
-function expectedBestOfN(values: number[], probabilities: number[], picks: number): number {
+function expectedBestOfN(
+	values: number[],
+	probabilities: number[],
+	picks: number,
+): number {
 	if (values.length === 0 || probabilities.length === 0 || picks <= 0) {
 		return 0;
 	}
@@ -158,8 +173,11 @@ export function RelicPlannerPage() {
 	const [showAllRewardsOwnedOnly, setShowAllRewardsOwnedOnly] = useState(false);
 	const [showAllItemsMasteredOrOwnedOnly, setShowAllItemsMasteredOrOwnedOnly] =
 		useState(false);
-	const [showAtLeastTenCopiesOnly, setShowAtLeastTenCopiesOnly] = useState(false);
-	const [tierFilter, setTierFilter] = useState<"all" | OwnedRelic["refinement"]>("all");
+	const [showAtLeastTenCopiesOnly, setShowAtLeastTenCopiesOnly] =
+		useState(false);
+	const [tierFilter, setTierFilter] = useState<
+		"all" | OwnedRelic["refinement"]
+	>("all");
 	const [sortKey, setSortKey] = useState<RelicSortKey>(DEFAULT_RELIC_SORT);
 	const [squadSize, setSquadSize] = useState<1 | 2 | 3 | 4>(4);
 
@@ -181,14 +199,20 @@ export function RelicPlannerPage() {
 			};
 
 			const recipeEntries = Array.isArray(inventoryData.Recipes)
-				? (inventoryData.Recipes as Array<{ ItemType?: string; ItemCount?: number }>)
+				? (inventoryData.Recipes as Array<{
+						ItemType?: string;
+						ItemCount?: number;
+					}>)
 				: [];
 			for (const entry of recipeEntries) {
 				addOwnedType(entry.ItemType, Math.max(1, entry.ItemCount ?? 1));
 			}
 
 			const miscEntries = Array.isArray(inventoryData.MiscItems)
-				? (inventoryData.MiscItems as Array<{ ItemType?: string; ItemCount?: number }>)
+				? (inventoryData.MiscItems as Array<{
+						ItemType?: string;
+						ItemCount?: number;
+					}>)
 				: [];
 			for (const entry of miscEntries) {
 				addOwnedType(entry.ItemType, entry.ItemCount ?? 0);
@@ -230,7 +254,10 @@ export function RelicPlannerPage() {
 
 		for (const warframe of warframes) {
 			const normalizedType = normalizeStoreItemPath(warframe.type);
-			if (warframe.owned || isWarframeMastered(warframe.xp, warframe.maxLevel)) {
+			if (
+				warframe.owned ||
+				isWarframeMastered(warframe.xp, warframe.maxLevel)
+			) {
 				set.add(normalizedType);
 			}
 		}
@@ -339,12 +366,16 @@ export function RelicPlannerPage() {
 					: 0;
 
 				const allRewardsOwned = relic.relicRewards.every((reward) => {
-					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(
+						reward.rewardName,
+					);
 					return (ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0;
 				});
 
 				const allItemsMasteredOrOwned = relic.relicRewards.every((reward) => {
-					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(
+						reward.rewardName,
+					);
 					if ((ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0) {
 						return true;
 					}
@@ -352,7 +383,9 @@ export function RelicPlannerPage() {
 				});
 
 				const missingItemsCount = relic.relicRewards.filter((reward) => {
-					const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
+					const normalizedRewardName = normalizeStoreItemPath(
+						reward.rewardName,
+					);
 					if ((ownedRewardCounts.get(normalizedRewardName) ?? 0) > 0) {
 						return false;
 					}
@@ -489,7 +522,7 @@ export function RelicPlannerPage() {
 	return (
 		<div className="flex flex-col h-full min-h-0 gap-2">
 			<Card className="py-3">
-				<CardContent className="space-y-3">
+				<CardContent className="flex flex-col gap-3">
 					<div className="flex flex-wrap items-center gap-2">
 						<Button
 							type="button"
@@ -503,7 +536,9 @@ export function RelicPlannerPage() {
 							type="button"
 							size="sm"
 							variant={showAllRewardsOwnedOnly ? "default" : "outline"}
-							onClick={() => setShowAllRewardsOwnedOnly((previous) => !previous)}
+							onClick={() =>
+								setShowAllRewardsOwnedOnly((previous) => !previous)
+							}
 						>
 							All rewards owned
 						</Button>
@@ -521,67 +556,93 @@ export function RelicPlannerPage() {
 							type="button"
 							size="sm"
 							variant={showAtLeastTenCopiesOnly ? "default" : "outline"}
-							onClick={() => setShowAtLeastTenCopiesOnly((previous) => !previous)}
+							onClick={() =>
+								setShowAtLeastTenCopiesOnly((previous) => !previous)
+							}
 						>
 							{">= 10 copies"}
 						</Button>
 					</div>
 
 					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
-						<label className="flex items-center justify-between gap-2 text-sm">
+						<div className="flex items-center justify-between gap-2 text-sm">
 							<span className="text-muted-foreground">Relic tier</span>
-							<select
-								className="h-8 px-2 text-sm border rounded-md bg-background"
+							<Select
 								value={tierFilter}
-								onChange={(event) =>
-									setTierFilter(event.target.value as "all" | OwnedRelic["refinement"])
+								onValueChange={(value) =>
+									setTierFilter(value as "all" | OwnedRelic["refinement"])
 								}
 							>
-								<option value="all">All</option>
-								<option value="Unleveled">Intact</option>
-								<option value="Exceptional">Exceptional</option>
-								<option value="Flawless">Flawless</option>
-								<option value="Radiant">Radiant</option>
-							</select>
-						</label>
+								<SelectTrigger className="h-8 text-sm w-fit">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										<SelectItem value="all">All</SelectItem>
+										<SelectItem value="Unleveled">Intact</SelectItem>
+										<SelectItem value="Exceptional">Exceptional</SelectItem>
+										<SelectItem value="Flawless">Flawless</SelectItem>
+										<SelectItem value="Radiant">Radiant</SelectItem>
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
 
-						<label className="flex items-center justify-between gap-2 text-sm">
+						<div className="flex items-center justify-between gap-2 text-sm">
 							<span className="text-muted-foreground">Sort</span>
-							<select
-								className="h-8 px-2 text-sm border rounded-md bg-background"
+							<Select
 								value={sortKey}
-								onChange={(event) =>
-									setSortKey(event.target.value as RelicSortKey)
-								}
+								onValueChange={(value) => setSortKey(value as RelicSortKey)}
 							>
-								<option value="platinum-profit">Platinum profit</option>
-								<option value="ducats-profit">Ducats profit</option>
-								<option value="missing-items">Missing items (best for MR)</option>
-								<option value="name">Name</option>
-								<option value="amount">Amount</option>
-								<option value="upgrade-platinum">Best to upgrade - platinum</option>
-								<option value="upgrade-ducats">Best to upgrade - ducats</option>
-							</select>
-						</label>
+								<SelectTrigger className="h-8 text-sm w-fit">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										<SelectItem value="platinum-profit">
+											Platinum profit
+										</SelectItem>
+										<SelectItem value="ducats-profit">Ducats profit</SelectItem>
+										<SelectItem value="missing-items">
+											Missing items (best for MR)
+										</SelectItem>
+										<SelectItem value="name">Name</SelectItem>
+										<SelectItem value="amount">Amount</SelectItem>
+										<SelectItem value="upgrade-platinum">
+											Best to upgrade - platinum
+										</SelectItem>
+										<SelectItem value="upgrade-ducats">
+											Best to upgrade - ducats
+										</SelectItem>
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
 
-						<label className="flex items-center justify-between gap-2 text-sm">
+						<div className="flex items-center justify-between gap-2 text-sm">
 							<span className="text-muted-foreground">Squad size</span>
-							<select
-								className="h-8 px-2 text-sm border rounded-md bg-background"
+							<Select
 								value={String(squadSize)}
-								onChange={(event) => {
-									const parsed = Number(event.target.value);
+								onValueChange={(value) => {
+									const parsed = Number(value);
 									if (parsed >= 1 && parsed <= 4) {
 										setSquadSize(parsed as 1 | 2 | 3 | 4);
 									}
 								}}
 							>
-								<option value="1">1</option>
-								<option value="2">2</option>
-								<option value="3">3</option>
-								<option value="4">4</option>
-							</select>
-						</label>
+								<SelectTrigger className="h-8 text-sm w-fit">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectGroup>
+										<SelectItem value="1">1</SelectItem>
+										<SelectItem value="2">2</SelectItem>
+										<SelectItem value="3">3</SelectItem>
+										<SelectItem value="4">4</SelectItem>
+									</SelectGroup>
+								</SelectContent>
+							</Select>
+						</div>
 
 						<div className="flex items-center text-xs text-muted-foreground">
 							Showing {filteredAndSortedRelics.length} / {relics.length} relics
@@ -598,114 +659,120 @@ export function RelicPlannerPage() {
 					<div className="grid grid-cols-1 gap-2 pb-2 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 						{filteredAndSortedRelics.map((relic) => {
 							const meta = relicMeta.get(relic.uniqueName);
-							const expectedDucats = meta?.expectedDucatsBySquad ?? relic.expectedDucats;
+							const expectedDucats =
+								meta?.expectedDucatsBySquad ?? relic.expectedDucats;
 							const expectedPlatinum =
 								meta?.expectedPlatinumBySquad ?? relic.expectedPlatinum;
 
 							return (
-							<Card
-								key={relic.uniqueName}
-								className="gap-0 py-3"
-								data-relic-unique-name={relic.uniqueName}
-							>
-								<CardHeader className="pb-2">
-									<div className="flex items-center justify-between gap-2">
-										<div className="flex items-center min-w-0 gap-2">
-											<img
-												src={relic.imageUrl}
-												alt={relic.name}
-												className="object-cover w-12 h-12 rounded shrink-0"
-											/>
-											<div className="min-w-0">
-												<CardTitle className="text-base leading-tight truncate">
-													{relic.name}
-												</CardTitle>
-												<div className="mt-1 flex items-center gap-1.5">
-													<Badge variant="outline">
-														{refinementLabel(relic.refinement)} (Lvl {relic.refinementLevel})
-													</Badge>
-													{meta?.vaulted ? <Badge variant="secondary">Vaulted</Badge> : null}
-												</div>
-											</div>
-										</div>
-										<Badge variant="secondary" className="text-sm">
-											x{relic.count}
-										</Badge>
-									</div>
-								</CardHeader>
-								<CardContent>
-									<div className="flex items-start h-full gap-2">
-										<div className="flex flex-col items-center justify-center h-full space-y-2 w-28 shrink-0">
-											<div className="flex justify-end text-center">
-												<p className="text-lg font-semibold">
-													{expectedDucats.toFixed(2)}
-												</p>
+								<Card
+									key={relic.uniqueName}
+									className="gap-0 py-3"
+									data-relic-unique-name={relic.uniqueName}
+								>
+									<CardHeader className="pb-2">
+										<div className="flex items-center justify-between gap-2">
+											<div className="flex items-center min-w-0 gap-2">
 												<img
-													src="/OrokinDucats.png"
-													alt="Ducats"
-													className="w-8 h-8"
+													src={relic.imageUrl}
+													alt={relic.name}
+													className="object-cover rounded size-12 shrink-0"
 												/>
-											</div>
-											<div className="flex items-center justify-end text-center">
-												{relic.isPlatinumReady ? (
-													<p className="text-lg font-semibold">
-														{expectedPlatinum.toFixed(2)}
-													</p>
-												) : (
-													<span
-														className="inline-block w-4 h-4 border-2 rounded-full border-muted-foreground/50 border-t-transparent animate-spin"
-													/>
-												)}
-												<img
-													src="/PlatinumLarge.png"
-													alt="Platinum"
-													className="w-6 h-6 mx-1"
-												/>
-											</div>
-										</div>
-										<div className="grid flex-1 grid-cols-3 gap-2">
-											{[...relic.relicRewards]
-												.sort((a, b) => {
-													const rarityDiff =
-														rarityOrder(a.rarity) - rarityOrder(b.rarity);
-													if (rarityDiff !== 0) {
-														return rarityDiff;
-													}
-													return a.rewardName.localeCompare(b.rewardName);
-												})
-												.map((reward) => (
-													<div
-														key={`${relic.uniqueName}-${reward.rewardName}`}
-														className={`relative rounded border p-1 ${rewardRarityClasses(reward.rarity)}`}
-															title={`${reward.rewardName} (${reward.rarity})${reward.itemCount > 1 ? ` x${reward.itemCount}` : ""}${reward.ducats > 0 ? ` • ${reward.ducats} ducats` : ""}${reward.platinum > 0 ? ` • ${reward.platinum} platinum` : ""}${(() => {
-																			const normalizedRewardName = normalizeStoreItemPath(reward.rewardName);
-																			const rewardState = rewardVaultState.get(normalizedRewardName);
-																			if (!rewardState || rewardState.total === 0) {
-																				return "";
-																			}
-																			return rewardState.vaulted === rewardState.total ? " • Vaulted reward" : "";
-																		})()}`}
-													>
-														{reward.imageUrl ? (
-															<img
-																src={reward.imageUrl}
-																alt={reward.rewardName}
-																className="object-cover w-12 h-12 mx-auto rounded"
-															/>
-														) : (
-															<div className="w-12 h-12 mx-auto rounded bg-muted" />
-														)}
-														{reward.itemCount > 1 ? (
-															<span className="absolute -bottom-1 -right-1 rounded bg-secondary px-1 text-[14px] text-secondary-foreground">
-																x{reward.itemCount}
-															</span>
+												<div className="min-w-0">
+													<CardTitle className="text-base leading-tight truncate">
+														{relic.name}
+													</CardTitle>
+													<div className="mt-1 flex items-center gap-1.5">
+														<Badge variant="outline">
+															{refinementLabel(relic.refinement)} (Lvl{" "}
+															{relic.refinementLevel})
+														</Badge>
+														{meta?.vaulted ? (
+															<Badge variant="secondary">Vaulted</Badge>
 														) : null}
 													</div>
-												))}
+												</div>
+											</div>
+											<Badge variant="secondary" className="text-sm">
+												x{relic.count}
+											</Badge>
 										</div>
-									</div>
-								</CardContent>
-							</Card>
+									</CardHeader>
+									<CardContent>
+										<div className="flex items-start h-full gap-2">
+											<div className="flex flex-col items-center justify-center h-full gap-2 w-28 shrink-0">
+												<div className="flex justify-end text-center">
+													<p className="text-lg font-semibold">
+														{expectedDucats.toFixed(2)}
+													</p>
+													<img
+														src="/OrokinDucats.png"
+														alt="Ducats"
+														className="size-8"
+													/>
+												</div>
+												<div className="flex items-center justify-end text-center">
+													{relic.isPlatinumReady ? (
+														<p className="text-lg font-semibold">
+															{expectedPlatinum.toFixed(2)}
+														</p>
+													) : (
+														<span className="inline-block border-2 rounded-full size-4 border-muted-foreground/50 border-t-transparent animate-spin" />
+													)}
+													<img
+														src="/PlatinumLarge.png"
+														alt="Platinum"
+														className="mx-1 size-6"
+													/>
+												</div>
+											</div>
+											<div className="grid flex-1 grid-cols-3 gap-2">
+												{[...relic.relicRewards]
+													.sort((a, b) => {
+														const rarityDiff =
+															rarityOrder(a.rarity) - rarityOrder(b.rarity);
+														if (rarityDiff !== 0) {
+															return rarityDiff;
+														}
+														return a.rewardName.localeCompare(b.rewardName);
+													})
+													.map((reward) => (
+														<div
+															key={`${relic.uniqueName}-${reward.rewardName}`}
+															className={`relative rounded border p-1 ${rewardRarityClasses(reward.rarity)}`}
+															title={`${reward.rewardName} (${reward.rarity})${reward.itemCount > 1 ? ` x${reward.itemCount}` : ""}${reward.ducats > 0 ? ` • ${reward.ducats} ducats` : ""}${reward.platinum > 0 ? ` • ${reward.platinum} platinum` : ""}${(() => {
+																const normalizedRewardName =
+																	normalizeStoreItemPath(reward.rewardName);
+																const rewardState =
+																	rewardVaultState.get(normalizedRewardName);
+																if (!rewardState || rewardState.total === 0) {
+																	return "";
+																}
+																return rewardState.vaulted === rewardState.total
+																	? " • Vaulted reward"
+																	: "";
+															})()}`}
+														>
+															{reward.imageUrl ? (
+																<img
+																	src={reward.imageUrl}
+																	alt={reward.rewardName}
+																	className="object-cover mx-auto rounded size-12"
+																/>
+															) : (
+																<div className="mx-auto rounded size-12 bg-muted" />
+															)}
+															{reward.itemCount > 1 ? (
+																<span className="absolute -bottom-1 -right-1 rounded bg-secondary px-1 text-[14px] text-secondary-foreground">
+																	x{reward.itemCount}
+																</span>
+															) : null}
+														</div>
+													))}
+											</div>
+										</div>
+									</CardContent>
+								</Card>
 							);
 						})}
 					</div>

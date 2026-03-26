@@ -154,8 +154,7 @@ function CollectionSection({
 	isIngredientItem,
 	isStarred,
 	onToggleStar,
-	gridClassName =
-		"grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
+	gridClassName = "grid grid-cols-1 gap-2 p-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5",
 }: CollectionSectionProps) {
 	return (
 		<div>
@@ -187,7 +186,8 @@ function CollectionSection({
 											title={starred ? "Unstar" : "Star"}
 										>
 											<Star
-												className={`h-4 w-4 ${starred ? "fill-current" : ""}`}
+												data-icon="inline-start"
+												className={starred ? "fill-current" : undefined}
 											/>
 										</Button>
 										<Button
@@ -198,7 +198,7 @@ function CollectionSection({
 											aria-label="Open crafting tree"
 											title="Crafting Tree"
 										>
-											<Network className="w-4 h-4" />
+											<Network data-icon="inline-start" />
 										</Button>
 									</div>
 									<CardHeader>
@@ -220,13 +220,13 @@ function CollectionSection({
 													>
 														<span
 															aria-hidden="true"
-															className="relative inline-block w-6 h-6 shrink-0"
+															className="relative inline-block size-6 shrink-0"
 														>
 															{item.isSubsumed ? (
 																<span className="absolute inset-0 rounded-full bg-red-500/60 blur-sm" />
 															) : null}
 															<span
-																className={`relative inline-block h-6 w-6 ${item.isSubsumed ? "bg-primary" : "bg-muted"}`}
+																className={`relative inline-block size-6 ${item.isSubsumed ? "bg-primary" : "bg-muted"}`}
 																style={{
 																	maskImage:
 																		'url("/icons/helminth/icon_empower.svg")',
@@ -252,11 +252,11 @@ function CollectionSection({
 													>
 														<span
 															aria-hidden="true"
-															className="relative inline-block w-6 h-6 shrink-0"
+															className="relative inline-block size-6 shrink-0"
 														>
 															<span className="absolute inset-0 rounded-full bg-amber-500/60 blur-sm" />
 															<span
-																className="relative inline-block w-6 h-6 bg-primary"
+																className="relative inline-block size-6 bg-primary"
 																style={{
 																	maskImage: 'url("/icons/icon_foundry.svg")',
 																	WebkitMaskImage:
@@ -278,13 +278,13 @@ function CollectionSection({
 												>
 													<span
 														aria-hidden="true"
-														className="relative inline-block w-6 h-6 shrink-0"
+														className="relative inline-block size-6 shrink-0"
 													>
 														{mastered ? (
 															<span className="absolute inset-0 rounded-full bg-green-500/60 blur-sm" />
 														) : null}
 														<span
-															className={`relative inline-block h-6 w-6 ${mastered ? "bg-primary" : "bg-muted"}`}
+															className={`relative inline-block size-6 ${mastered ? "bg-primary" : "bg-muted"}`}
 															style={{
 																maskImage: 'url("/icons/icon_mastery.svg")',
 																WebkitMaskImage:
@@ -308,7 +308,7 @@ function CollectionSection({
 												<img
 													src={item.imageUrl}
 													alt={item.name}
-													className="object-cover w-24 h-24 rounded-md"
+													className="object-cover rounded-md size-24"
 												/>
 											</div>
 
@@ -430,7 +430,7 @@ function PendingRecipesSection({
 										<img
 											src={recipe.imageUrl}
 											alt={recipe.name}
-											className="object-cover w-16 h-16 rounded-md"
+											className="object-cover rounded-md size-16"
 										/>
 										<div className="text-sm">
 											<p className="font-medium">
@@ -519,7 +519,7 @@ function MaterialRequirementsPanel({
 							No missing material requirements for selected items.
 						</p>
 					) : (
-						<div className="space-y-1">
+						<div className="flex flex-col gap-1">
 							{visibleRequirements.map((material) => (
 								<div
 									key={material.key}
@@ -529,7 +529,7 @@ function MaterialRequirementsPanel({
 										<img
 											src={material.imageUrl}
 											alt={material.name}
-											className="object-cover w-8 h-8 rounded"
+											className="object-cover rounded size-8"
 										/>
 										<p className="text-sm truncate">{material.name}</p>
 									</div>
@@ -1199,12 +1199,13 @@ export function FoundryPage({ error }: FoundryPageProps) {
 									{category.filter === "starred" ? (
 										<Star
 											aria-hidden="true"
-											className={`h-6 w-6 shrink-0 fill-current ${isActive ? "text-primary-foreground" : "text-foreground"}`}
+											data-icon="inline-start"
+											className={`shrink-0 fill-current ${isActive ? "text-primary-foreground" : "text-foreground"}`}
 										/>
 									) : (
 										<span
 											aria-hidden="true"
-											className={`h-6 w-6 shrink-0 ${isActive ? "bg-primary-foreground" : "bg-foreground"}`}
+											className={`size-6 shrink-0 ${isActive ? "bg-primary-foreground" : "bg-foreground"}`}
 											style={{
 												maskImage: `url("${category.iconPath}")`,
 												WebkitMaskImage: `url("${category.iconPath}")`,
@@ -1252,30 +1253,20 @@ export function FoundryPage({ error }: FoundryPageProps) {
 								value={filterOwned}
 								onChange={setFilterOwned}
 							/>
-							<button
-								type="button"
-								className="cursor-pointer"
+							<Badge
+								variant={filterReadyToBuild ? "default" : "outline"}
+								className="text-xs cursor-pointer select-none"
 								onClick={() => setFilterReadyToBuild((prev) => !prev)}
 							>
-								<Badge
-									variant={filterReadyToBuild ? "default" : "outline"}
-									className="text-xs cursor-pointer select-none"
-								>
-									Ready to Build
-								</Badge>
-							</button>
-							<button
-								type="button"
-								className="cursor-pointer"
+								Ready to Build
+							</Badge>
+							<Badge
+								variant={filterResurgence ? "default" : "outline"}
+								className="text-xs cursor-pointer select-none"
 								onClick={() => setFilterResurgence((prev) => !prev)}
 							>
-								<Badge
-									variant={filterResurgence ? "default" : "outline"}
-									className="text-xs cursor-pointer select-none"
-								>
-									Prime Resurgence
-								</Badge>
-							</button>
+								Prime Resurgence
+							</Badge>
 							<TriStateFilterBadge
 								label="Crafting Ingredient"
 								value={filterIngredient}
@@ -1289,18 +1280,13 @@ export function FoundryPage({ error }: FoundryPageProps) {
 								/>
 							)}
 							{hasActiveFilters && (
-								<button
-									type="button"
-									className="cursor-pointer"
+								<Badge
+									variant="destructive"
+									className="text-xs cursor-pointer select-none"
 									onClick={clearAllFilters}
 								>
-									<Badge
-										variant="destructive"
-										className="text-xs cursor-pointer select-none"
-									>
-										Clear All
-									</Badge>
-								</button>
+									Clear All
+								</Badge>
 							)}
 						</div>
 					)}
@@ -1314,7 +1300,7 @@ export function FoundryPage({ error }: FoundryPageProps) {
 				</div>
 
 				<ScrollArea className="flex-1 min-h-0">
-					<div className="space-y-2">
+					<div className="flex flex-col gap-2">
 						{foundryFilter === "all" &&
 							renderCollection(
 								allCollectionItems,

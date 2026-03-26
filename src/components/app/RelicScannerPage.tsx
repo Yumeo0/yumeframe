@@ -94,7 +94,7 @@ export function RelicScannerPage({
 							No scan events yet. Run a manual scan or open the relic reward screen.
 						</p>
 					) : (
-						<div className="space-y-3">
+						<div className="flex flex-col gap-3">
 							<div className="flex items-center gap-2 text-xs text-muted-foreground">
 								<Badge variant={statusBadgeVariant(latestScan.status)}>
 									{latestScan.status}
@@ -134,7 +134,7 @@ export function RelicScannerPage({
 				</CardHeader>
 				<CardContent className="min-h-0">
 					<ScrollArea className="border rounded h-70">
-						<div className="p-2 space-y-1">
+						<div className="p-2 flex flex-col gap-1">
 							{recentScans.map((scan) => (
 								<div
 									key={scan.id}

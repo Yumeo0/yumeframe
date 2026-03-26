@@ -208,7 +208,7 @@ function rtApportion(v: RTNode, defaultAncestor: RTNode): RTNode {
 		vor = nextVor;
 		vor.ancestor = v;
 
-		const shift = (vil.prelim + sil) - (vir.prelim + sir) + SPACING;
+		const shift = vil.prelim + sil - (vir.prelim + sir) + SPACING;
 		if (shift > 0) {
 			rtMoveSubtree(rtAncestor(vil, v, defaultAncestor), v, shift);
 			sir += shift;
@@ -368,7 +368,7 @@ function buildVisibleTree(
 	expandedNodeIds: Set<string>,
 	hideOwnedNodes: boolean,
 	isRoot = false,
-	): CraftingTreeNode | null {
+): CraftingTreeNode | null {
 	if (!isRoot && hideOwnedNodes && node.owned === true) {
 		return null;
 	}
@@ -392,7 +392,10 @@ function buildVisibleTree(
 	};
 }
 
-function collectExpandableNodeIds(node: CraftingTreeNode, ids: Set<string>): void {
+function collectExpandableNodeIds(
+	node: CraftingTreeNode,
+	ids: Set<string>,
+): void {
 	if (node.children.length > 0) {
 		ids.add(node.id);
 	}
@@ -420,7 +423,9 @@ export function CraftingTreeModal({
 		originY: number;
 	} | null>(null);
 	const initializedForItemKeyRef = useRef<string | null>(null);
-	const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(new Set());
+	const [expandedNodeIds, setExpandedNodeIds] = useState<Set<string>>(
+		new Set(),
+	);
 	const [hideOwnedNodes, setHideOwnedNodes] = useState(false);
 	const [pendingInitialCenter, setPendingInitialCenter] = useState(false);
 	const [scale, setScale] = useState(1);
@@ -489,7 +494,11 @@ export function CraftingTreeModal({
 			path: Set<string>,
 		): CraftingTreeNode => {
 			const nestedRequirements = part.requirements;
-			if (nestedRequirements && nestedRequirements.length > 0 && depth < MAX_DEPTH) {
+			if (
+				nestedRequirements &&
+				nestedRequirements.length > 0 &&
+				depth < MAX_DEPTH
+			) {
 				return {
 					id,
 					name: part.name,
@@ -524,7 +533,9 @@ export function CraftingTreeModal({
 			return {
 				id,
 				name: part.name,
-				recipeName: resolved ? `${resolved.name} (${resolved.key})` : (part.itemType ?? part.name),
+				recipeName: resolved
+					? `${resolved.name} (${resolved.key})`
+					: (part.itemType ?? part.name),
 				recipeUniqueName: resolved?.key ?? part.itemType,
 				imageUrl: part.imageUrl,
 				count: part.count,
@@ -588,22 +599,25 @@ export function CraftingTreeModal({
 
 	const layout = useMemo(() => buildTreeLayout(visibleTree), [visibleTree]);
 
-	const recenterTree = useCallback((nextScale?: number) => {
-		const viewport = viewportRef.current;
-		if (!viewport) {
-			return;
-		}
+	const recenterTree = useCallback(
+		(nextScale?: number) => {
+			const viewport = viewportRef.current;
+			if (!viewport) {
+				return;
+			}
 
-		const appliedScale = nextScale ?? scaleRef.current;
-		const rect = viewport.getBoundingClientRect();
-		const topMargin = 24;
-		const centeredX = (rect.width - layout.width * appliedScale) / 2;
+			const appliedScale = nextScale ?? scaleRef.current;
+			const rect = viewport.getBoundingClientRect();
+			const topMargin = 24;
+			const centeredX = (rect.width - layout.width * appliedScale) / 2;
 
-		setOffset({
-			x: centeredX,
-			y: topMargin,
-		});
-	}, [layout.width]);
+			setOffset({
+				x: centeredX,
+				y: topMargin,
+			});
+		},
+		[layout.width],
+	);
 
 	const toggleNode = useCallback((nodeId: string) => {
 		setExpandedNodeIds((previous) => {
@@ -933,7 +947,7 @@ export function CraftingTreeModal({
 									<img
 										src={node.imageUrl}
 										alt={node.name}
-										className="object-cover w-12 h-12 rounded shrink-0"
+										className="object-cover size-12 rounded shrink-0"
 									/>
 									<div className="min-w-0">
 										<p className="text-sm font-medium truncate">{node.name}</p>

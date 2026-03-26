@@ -682,7 +682,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 
 	return (
 		<ScrollArea className="h-full min-w-0">
-			<div className="p-2 pb-4 space-y-2">
+			<div className="p-2 pb-4 flex flex-col gap-2">
 				<div className="flex flex-wrap items-center justify-between gap-2 px-1">
 					<div className="flex items-center gap-3">
 						<h2 className="text-lg font-semibold">Worldstate</h2>
@@ -843,7 +843,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 												{group.fissures.length}
 											</Badge>
 										</div>
-										<div className="space-y-1">
+										<div className="flex flex-col gap-1">
 											{group.fissures.map((fissure) => (
 												<div
 													key={
@@ -932,7 +932,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 						<CardHeader className="px-4 py-0">
 							<CardTitle className="text-sm">Circuit Rewards</CardTitle>
 						</CardHeader>
-						<CardContent className="px-4 space-y-2">
+						<CardContent className="px-4 flex flex-col gap-2">
 							{circuitChoices.length === 0 ? (
 								<p className="text-xs text-muted-foreground">
 									No circuit data available.
@@ -996,7 +996,7 @@ export function WorldstatePage({ use24HourClock }: WorldstatePageProps) {
 									No items available.
 								</p>
 							) : (
-								<div className="space-y-2">
+								<div className="flex flex-col gap-2">
 									{primeResurgenceSections.warframes.length > 0 && (
 										<div className="p-2 border rounded-md">
 											<div className="flex items-center justify-between mb-1">

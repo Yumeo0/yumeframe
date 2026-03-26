@@ -9,11 +9,13 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
@@ -137,22 +139,22 @@ export function SettingsPage({
 						<CardDescription>General app preferences.</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
-						<label className="flex items-center justify-between p-3 border rounded">
+						<Label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">Use 24-hour clock</p>
 								<p className="text-xs text-muted-foreground">
 									Used for refresh and completion timestamps.
 								</p>
 							</div>
-							<input
+							<Input
 								type="checkbox"
 								checked={use24HourClock}
 								onChange={(event) =>
 									onUse24HourClockChange(event.target.checked)
 								}
 							/>
-						</label>
-						<label className="flex items-center justify-between p-3 border rounded">
+						</Label>
+						<Label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">
 									Auto-collapse all crafting parts
@@ -161,14 +163,14 @@ export function SettingsPage({
 									When opening a tree, collapse all subrecipes by default.
 								</p>
 							</div>
-							<input
+							<Input
 								type="checkbox"
 								checked={craftingTreeAutoCollapseAllParts}
 								onChange={(event) =>
 									onCraftingTreeAutoCollapseAllPartsChange(event.target.checked)
 								}
 							/>
-						</label>
+						</Label>
 					</CardContent>
 				</Card>
 			)}
@@ -183,42 +185,42 @@ export function SettingsPage({
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
 						<div className="grid gap-3 md:grid-cols-2">
-							<label className="flex items-center justify-between p-3 border rounded">
+							<Label className="flex items-center justify-between p-3 border rounded">
 								<div>
 									<p className="text-sm font-medium">Enable Scanner</p>
 									<p className="text-xs text-muted-foreground">
 										Watches EE.log for relic reward events.
 									</p>
 								</div>
-								<input
+								<Input
 									type="checkbox"
 									checked={relicScannerEnabled}
 									onChange={(event) =>
 										onRelicScannerEnabledChange(event.target.checked)
 									}
 								/>
-							</label>
-							<label className="flex items-center justify-between p-3 border rounded">
+							</Label>
+							<Label className="flex items-center justify-between p-3 border rounded">
 								<div>
 									<p className="text-sm font-medium">Enable Overlay</p>
 									<p className="text-xs text-muted-foreground">
 										Overlay path is optional; in-app scanner tab always updates.
 									</p>
 								</div>
-								<input
+								<Input
 									type="checkbox"
 									checked={relicOverlayEnabled}
 									onChange={(event) => {
 										void onRelicOverlayEnabledChange(event.target.checked);
 									}}
 								/>
-							</label>
+							</Label>
 						</div>
 						<div className="flex flex-col gap-2">
-							<label htmlFor="scanner-hotkey" className="text-sm font-medium">
+							<Label htmlFor="scanner-hotkey" className="text-sm font-medium">
 								Global manual scan hotkey
-							</label>
-							<input
+							</Label>
+							<Input
 								id="scanner-hotkey"
 								type="text"
 								value={relicScannerHotkey}
@@ -226,7 +228,7 @@ export function SettingsPage({
 									onRelicScannerHotkeyChange(event.target.value.toUpperCase())
 								}
 								placeholder="F11"
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 							/>
 						</div>
 						<div className="grid gap-3 md:grid-cols-2">
@@ -247,19 +249,21 @@ export function SettingsPage({
 										<SelectValue placeholder="Choose delay mode" />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="fixed">Fixed delay</SelectItem>
-										<SelectItem value="adaptive">Adaptive loop</SelectItem>
+										<SelectGroup>
+											<SelectItem value="fixed">Fixed delay</SelectItem>
+											<SelectItem value="adaptive">Adaptive loop</SelectItem>
+										</SelectGroup>
 									</SelectContent>
 								</Select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<label
+								<Label
 									htmlFor="scanner-auto-debounce"
 									className="text-sm font-medium"
 								>
 									Trigger debounce (ms)
-								</label>
-								<input
+								</Label>
+								<Input
 									id="scanner-auto-debounce"
 									type="number"
 									min={100}
@@ -272,19 +276,19 @@ export function SettingsPage({
 										}
 										onRelicScannerAutoDebounceMsChange(parsed);
 									}}
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 							</div>
 						</div>
 						{relicScannerAutoDelayMode === "fixed" ? (
 							<div className="flex flex-col gap-2">
-								<label
+								<Label
 									htmlFor="scanner-fixed-delay"
 									className="text-sm font-medium"
 								>
 									Fixed auto delay (ms)
-								</label>
-								<input
+								</Label>
+								<Input
 									id="scanner-fixed-delay"
 									type="number"
 									min={0}
@@ -297,19 +301,19 @@ export function SettingsPage({
 										}
 										onRelicScannerAutoFixedDelayMsChange(parsed);
 									}}
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 							</div>
 						) : (
 							<div className="grid gap-3 md:grid-cols-2">
 								<div className="flex flex-col gap-2">
-									<label
+									<Label
 										htmlFor="scanner-adaptive-interval"
 										className="text-sm font-medium"
 									>
 										Adaptive interval (ms)
-									</label>
-									<input
+									</Label>
+									<Input
 										id="scanner-adaptive-interval"
 										type="number"
 										min={50}
@@ -322,17 +326,17 @@ export function SettingsPage({
 											}
 											onRelicScannerAutoAdaptiveIntervalMsChange(parsed);
 										}}
-										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 									/>
 								</div>
 								<div className="flex flex-col gap-2">
-									<label
+									<Label
 										htmlFor="scanner-adaptive-timeout"
 										className="text-sm font-medium"
 									>
 										Adaptive timeout (ms)
-									</label>
-									<input
+									</Label>
+									<Input
 										id="scanner-adaptive-timeout"
 										type="number"
 										min={300}
@@ -345,7 +349,7 @@ export function SettingsPage({
 											}
 											onRelicScannerAutoAdaptiveTimeoutMsChange(parsed);
 										}}
-										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 									/>
 								</div>
 							</div>
@@ -374,30 +378,30 @@ export function SettingsPage({
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
-						<label className="flex items-center justify-between p-3 border rounded">
+						<Label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">Auto-refresh inventory</p>
 								<p className="text-xs text-muted-foreground">
 									Automatically fetches inventory data on a timer.
 								</p>
 							</div>
-							<input
+							<Input
 								type="checkbox"
 								checked={inventoryAutoRefreshEnabled}
 								onChange={(event) =>
 									onInventoryAutoRefreshEnabledChange(event.target.checked)
 								}
 							/>
-						</label>
+						</Label>
 
 						<div className="flex flex-col gap-2">
-							<label
+							<Label
 								htmlFor="inventory-refresh-interval"
 								className="text-sm font-medium"
 							>
 								Refresh interval (seconds)
-							</label>
-							<input
+							</Label>
+							<Input
 								id="inventory-refresh-interval"
 								type="number"
 								min={15}
@@ -411,7 +415,7 @@ export function SettingsPage({
 									}
 									onInventoryAutoRefreshIntervalSecondsChange(parsed);
 								}}
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground disabled:opacity-60"
+								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground disabled:opacity-60"
 							/>
 							<p className="text-xs text-muted-foreground">
 								Minimum 15 seconds.
@@ -452,23 +456,25 @@ export function SettingsPage({
 									/>
 								</SelectTrigger>
 								<SelectContent>
-									{detectedEeLogPaths.map((path) => (
-										<SelectItem key={path} value={path} className="font-mono">
-											{path}
-										</SelectItem>
-									))}
+									<SelectGroup>
+										{detectedEeLogPaths.map((path) => (
+											<SelectItem key={path} value={path} className="font-mono">
+												{path}
+											</SelectItem>
+										))}
+									</SelectGroup>
 								</SelectContent>
 							</Select>
 						</div>
 						<div className="flex flex-col gap-2">
 							<Label htmlFor="ee-log-path">Manual path</Label>
-							<input
+							<Input
 								id="ee-log-path"
 								type="text"
 								value={eeLogPath}
 								onChange={(event) => onEeLogPathChange(event.target.value)}
 								placeholder="Path to EE.log"
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 							/>
 						</div>
 						<div className="flex items-center gap-2">
@@ -482,9 +488,9 @@ export function SettingsPage({
 								disabled={eeLogDetectLoading}
 							>
 								{eeLogDetectLoading ? (
-									<Loader2 className="w-4 h-4 animate-spin" />
+									<Loader2 data-icon="inline-start" className="animate-spin" />
 								) : (
-									<Search className="w-4 h-4" />
+									<Search data-icon="inline-start" />
 								)}
 								Auto-detect
 							</Button>
@@ -496,7 +502,7 @@ export function SettingsPage({
 									void onPickEeLogPath();
 								}}
 							>
-								<FolderOpen className="w-4 h-4" />
+								<FolderOpen data-icon="inline-start" />
 								Browse...
 							</Button>
 						</div>
@@ -518,7 +524,7 @@ export function SettingsPage({
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="flex flex-col gap-4">
-						<label className="flex items-center justify-between p-3 border rounded">
+						<Label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">
 									Show crafting recipe names
@@ -527,14 +533,14 @@ export function SettingsPage({
 									Displays internal recipe identifiers in the crafting tree.
 								</p>
 							</div>
-							<input
+							<Input
 								type="checkbox"
 								checked={craftingTreeShowRecipeDebugNames}
 								onChange={(event) =>
 									onCraftingTreeShowRecipeDebugNamesChange(event.target.checked)
 								}
 							/>
-						</label>
+						</Label>
 
 						<div className="p-3 border rounded">
 							<p className="text-sm font-medium">Relic Reward Image Test</p>
@@ -542,14 +548,14 @@ export function SettingsPage({
 								Run the relic OCR pipeline against a local screenshot file.
 							</p>
 							<div className="flex flex-col gap-2 mt-2">
-								<input
+								<Input
 									type="text"
 									value={relicTestImagePath}
 									onChange={(event) =>
 										onRelicTestImagePathChange(event.target.value)
 									}
 									placeholder="Path to reward screenshot image"
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-input bg-background text-foreground"
+									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 								<div className="flex items-center gap-2">
 									<Button
@@ -562,14 +568,17 @@ export function SettingsPage({
 										}}
 									>
 										{relicImageTestLoading ? (
-											<Loader2 className="w-4 h-4 animate-spin" />
+											<Loader2
+												data-icon="inline-start"
+												className="animate-spin"
+											/>
 										) : null}
 										Run image test
 									</Button>
 								</div>
 
 								{latestRewardGuessDebug.length > 0 ? (
-									<div className="min-w-0 mt-2 space-y-2">
+									<div className="flex flex-col min-w-0 gap-2 mt-2">
 										{latestRewardGuessDebug.map((entry, index) => (
 											<div
 												key={`${entry.candidate}-${index}`}
@@ -581,7 +590,7 @@ export function SettingsPage({
 												<p className="text-[11px] text-muted-foreground wrap-break-word">
 													normalized: {entry.normalizedCandidate || "(empty)"}
 												</p>
-												<ul className="mt-1 space-y-1 text-[11px] font-mono text-muted-foreground">
+												<ul className="mt-1 text-[11px] font-mono text-muted-foreground flex flex-col gap-1">
 													{entry.guesses.map((guess) => (
 														<li
 															key={`${entry.candidate}-${guess.rewardName}`}
@@ -619,7 +628,7 @@ export function SettingsPage({
 							<p className="mb-2 text-sm font-medium">Asset Index</p>
 							{indexLoading && (
 								<div className="flex items-center gap-2">
-									<Loader2 className="w-4 h-4 animate-spin" />
+									<Loader2 className="size-4 animate-spin" />
 									Loading asset index...
 								</div>
 							)}
@@ -631,7 +640,7 @@ export function SettingsPage({
 							)}
 							{assets.length > 0 && (
 								<Card className="max-w-md min-w-0 p-4 border rounded-lg bg-muted/50">
-									<ul className="space-y-2 font-mono text-xs">
+									<ul className="flex flex-col gap-2 font-mono text-xs">
 										{assets.map((asset) => (
 											<li
 												key={`${asset.filename}-${asset.hash}`}
@@ -669,7 +678,7 @@ export function SettingsPage({
 										}
 										title="Copy to clipboard"
 									>
-										<Clipboard className="w-4 h-4" />
+										<Clipboard data-icon="inline-start" />
 										Copy
 									</Button>
 								)}

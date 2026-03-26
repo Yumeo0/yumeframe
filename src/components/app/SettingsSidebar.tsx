@@ -57,7 +57,7 @@ export function SettingsSidebar({
 			<div className="flex items-center justify-center gap-3 px-2 py-3 mb-4 md:justify-start">
 				<span
 					aria-hidden="true"
-					className="w-8 h-8 shrink-0 bg-foreground"
+					className="size-8 shrink-0 bg-foreground"
 					style={{
 						maskImage: 'url("/icons/icon_settings.svg")',
 						WebkitMaskImage: 'url("/icons/icon_settings.svg")',
@@ -73,8 +73,8 @@ export function SettingsSidebar({
 			</div>
 
 			<nav className="flex flex-col justify-between h-full gap-4">
-				<div className="space-y-4">
-					<div className="space-y-2">
+				<div className="flex flex-col gap-4">
+					<div className="flex flex-col gap-2">
 						<p className="hidden px-3 text-xs font-medium tracking-wide uppercase text-muted-foreground md:block">
 							General
 						</p>
@@ -87,7 +87,7 @@ export function SettingsSidebar({
 							/>
 						))}
 					</div>
-					<div className="space-y-2">
+					<div className="flex flex-col gap-2">
 						<p className="hidden px-3 text-xs font-medium tracking-wide uppercase text-muted-foreground md:block">
 							Advanced
 						</p>

@@ -14,6 +14,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
@@ -541,9 +542,11 @@ export function ArbitrationsPage({
 											<SelectValue />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="7">7 Days</SelectItem>
-											<SelectItem value="15">15 Days</SelectItem>
-											<SelectItem value="30">30 Days</SelectItem>
+											<SelectGroup>
+												<SelectItem value="7">7 Days</SelectItem>
+												<SelectItem value="15">15 Days</SelectItem>
+												<SelectItem value="30">30 Days</SelectItem>
+											</SelectGroup>
 										</SelectContent>
 									</Select>
 								</div>
@@ -593,7 +596,7 @@ export function ArbitrationsPage({
 													) : null}
 												</div>
 
-												<div className="pr-1 space-y-1">
+												<div className="pr-1 flex flex-col gap-1">
 													{day.entries.map((entry) => {
 														const missionMode =
 															modeByNodeCode[entry.nodeCode] ?? "Unknown";
@@ -619,7 +622,8 @@ export function ArbitrationsPage({
 																</div>
 																<div className="flex flex-col items-end gap-1">
 																	<Badge
-                                                                        className="text-gray-300 border-gray-500 bg-gray-500/20"
+																		variant="outline"
+																		className="text-muted-foreground bg-muted/30"
 																	>
 																		{formatCountdown(entry.timestampSec, nowMs)}
 																	</Badge>

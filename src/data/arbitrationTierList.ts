@@ -106,6 +106,13 @@ function buildTierList(): ArbitrationTierList {
         "Memphis",
         "Everest",
         "Caracol",
+		"Ganymede",
+		"Apollo",
+		"Wahiba",
+		"Olympus",
+		"Stickney",
+		"Selkie",
+		"Oro Works",
     ])
 
 	return byName;
