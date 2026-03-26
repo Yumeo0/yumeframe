@@ -22,19 +22,19 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-xcap = "0.8.0"
+xcap = "0.9.3"
 image = "0.25"
-imageproc = "0.25"
+imageproc = "0.26"
 ocr_rs = { package = "ocr-rs", git = "https://github.com/zibo-chen/rust-paddle-ocr.git" }
-global-hotkey = "0.4.2"
+global-hotkey = "0.7.0"
 
 # Warframe API helper dependencies
 sysinfo = "0.38"
 read-process-memory = "0.1"
 reqwest = { version = "0.13", features = ["blocking"] }
-lzma-rs = "0.1"
+lzma-rs = "0.3"
 tokio = { version = "1", features = ["rt", "sync"] }
-directories = "5"
+directories = "6"
 tauri-plugin-http = "2"
 tauri-plugin-dialog = "2"
 
