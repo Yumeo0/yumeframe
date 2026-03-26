@@ -9,6 +9,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -146,12 +147,9 @@ export function SettingsPage({
 									Used for refresh and completion timestamps.
 								</p>
 							</div>
-							<Input
-								type="checkbox"
+							<Checkbox
 								checked={use24HourClock}
-								onChange={(event) =>
-									onUse24HourClockChange(event.target.checked)
-								}
+								onCheckedChange={(checked) => onUse24HourClockChange(checked)}
 							/>
 						</Label>
 						<Label className="flex items-center justify-between p-3 border rounded">
@@ -163,11 +161,10 @@ export function SettingsPage({
 									When opening a tree, collapse all subrecipes by default.
 								</p>
 							</div>
-							<Input
-								type="checkbox"
+							<Checkbox
 								checked={craftingTreeAutoCollapseAllParts}
-								onChange={(event) =>
-									onCraftingTreeAutoCollapseAllPartsChange(event.target.checked)
+								onCheckedChange={(checked) =>
+									onCraftingTreeAutoCollapseAllPartsChange(checked)
 								}
 							/>
 						</Label>
@@ -192,11 +189,10 @@ export function SettingsPage({
 										Watches EE.log for relic reward events.
 									</p>
 								</div>
-								<Input
-									type="checkbox"
+								<Checkbox
 									checked={relicScannerEnabled}
-									onChange={(event) =>
-										onRelicScannerEnabledChange(event.target.checked)
+									onCheckedChange={(checked) =>
+										onRelicScannerEnabledChange(checked)
 									}
 								/>
 							</Label>
@@ -207,11 +203,10 @@ export function SettingsPage({
 										Overlay path is optional; in-app scanner tab always updates.
 									</p>
 								</div>
-								<Input
-									type="checkbox"
+								<Checkbox
 									checked={relicOverlayEnabled}
-									onChange={(event) => {
-										void onRelicOverlayEnabledChange(event.target.checked);
+									onCheckedChange={(checked) => {
+										void onRelicOverlayEnabledChange(checked);
 									}}
 								/>
 							</Label>
@@ -385,11 +380,10 @@ export function SettingsPage({
 									Automatically fetches inventory data on a timer.
 								</p>
 							</div>
-							<Input
-								type="checkbox"
+							<Checkbox
 								checked={inventoryAutoRefreshEnabled}
-								onChange={(event) =>
-									onInventoryAutoRefreshEnabledChange(event.target.checked)
+								onCheckedChange={(checked) =>
+									onInventoryAutoRefreshEnabledChange(checked)
 								}
 							/>
 						</Label>
@@ -439,9 +433,13 @@ export function SettingsPage({
 							<Label htmlFor="ee-log-detected-paths">Detected files</Label>
 							<Select
 								value={
-									detectedEeLogPaths.includes(eeLogPath) ? eeLogPath : undefined
+									detectedEeLogPaths.includes(eeLogPath) ? eeLogPath : null
 								}
-								onValueChange={onEeLogPathChange}
+								onValueChange={(value) => {
+									if (value) {
+										onEeLogPathChange(value);
+									}
+								}}
 							>
 								<SelectTrigger
 									id="ee-log-detected-paths"
@@ -533,11 +531,10 @@ export function SettingsPage({
 									Displays internal recipe identifiers in the crafting tree.
 								</p>
 							</div>
-							<Input
-								type="checkbox"
+							<Checkbox
 								checked={craftingTreeShowRecipeDebugNames}
-								onChange={(event) =>
-									onCraftingTreeShowRecipeDebugNamesChange(event.target.checked)
+								onCheckedChange={(checked) =>
+									onCraftingTreeShowRecipeDebugNamesChange(checked)
 								}
 							/>
 						</Label>
@@ -579,9 +576,9 @@ export function SettingsPage({
 
 								{latestRewardGuessDebug.length > 0 ? (
 									<div className="flex flex-col min-w-0 gap-2 mt-2">
-										{latestRewardGuessDebug.map((entry, index) => (
+										{latestRewardGuessDebug.map((entry) => (
 											<div
-												key={`${entry.candidate}-${index}`}
+												key={`${entry.candidate}`}
 												className="min-w-0 p-2 border rounded bg-muted/30"
 											>
 												<p className="font-mono text-xs text-foreground wrap-break-word">

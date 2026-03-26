@@ -534,9 +534,13 @@ export function ArbitrationsPage({
 									</div>
 									<Select
 										value={selectedDays.toString()}
-										onValueChange={(value) =>
-											setSelectedDays(Number.parseInt(value, 10))
-										}
+										onValueChange={(value) => {
+											if (!value) {
+												return;
+											}
+
+											setSelectedDays(Number.parseInt(value, 10));
+										}}
 									>
 										<SelectTrigger className="w-fit">
 											<SelectValue />

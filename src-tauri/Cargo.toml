@@ -1,8 +1,8 @@
 [package]
 name = "yumeframe"
 version = "0.2.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "YumeFrame is a desktop companion app for Warframe focused on inventory progress, crafting decisions, relic value planning, and worldstate insights."
+authors = ["Yumeo"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
