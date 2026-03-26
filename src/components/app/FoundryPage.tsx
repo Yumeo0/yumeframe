@@ -315,9 +315,9 @@ function CollectionSection({
 											<div className="flex-1">
 												{item.parts.length > 0 ? (
 													<div className="grid grid-cols-3 gap-2">
-														{item.parts.map((part, index) => (
+														{item.parts.map((part) => (
 															<div
-																key={`${item.key}-${part.name}-${index}`}
+																key={`${item.key}-${part.name}`}
 																className="relative flex justify-center group"
 																title={`${part.name}${part.count ? ` x${part.count}` : ""}${part.owned === undefined ? "" : `: ${part.owned ? "Owned" : part.hasRecipe ? "Recipe owned" : "Missing"}`}`}
 															>

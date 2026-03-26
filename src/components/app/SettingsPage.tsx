@@ -139,7 +139,7 @@ export function SettingsPage({
 						<CardTitle>General</CardTitle>
 						<CardDescription>General app preferences.</CardDescription>
 					</CardHeader>
-					<CardContent className="flex flex-col gap-4">
+					<CardContent className="flex flex-col gap-2">
 						<Label className="flex items-center justify-between p-3 border rounded">
 							<div>
 								<p className="text-sm font-medium">Use 24-hour clock</p>
@@ -223,7 +223,6 @@ export function SettingsPage({
 									onRelicScannerHotkeyChange(event.target.value.toUpperCase())
 								}
 								placeholder="F11"
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 							/>
 						</div>
 						<div className="grid gap-3 md:grid-cols-2">
@@ -252,12 +251,7 @@ export function SettingsPage({
 								</Select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label
-									htmlFor="scanner-auto-debounce"
-									className="text-sm font-medium"
-								>
-									Trigger debounce (ms)
-								</Label>
+								<Label htmlFor="scanner-auto-debounce">Trigger debounce (ms)</Label>
 								<Input
 									id="scanner-auto-debounce"
 									type="number"
@@ -271,7 +265,6 @@ export function SettingsPage({
 										}
 										onRelicScannerAutoDebounceMsChange(parsed);
 									}}
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 							</div>
 						</div>
@@ -296,7 +289,6 @@ export function SettingsPage({
 										}
 										onRelicScannerAutoFixedDelayMsChange(parsed);
 									}}
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 							</div>
 						) : (
@@ -321,7 +313,6 @@ export function SettingsPage({
 											}
 											onRelicScannerAutoAdaptiveIntervalMsChange(parsed);
 										}}
-										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 									/>
 								</div>
 								<div className="flex flex-col gap-2">
@@ -344,7 +335,6 @@ export function SettingsPage({
 											}
 											onRelicScannerAutoAdaptiveTimeoutMsChange(parsed);
 										}}
-										className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 									/>
 								</div>
 							</div>
@@ -409,7 +399,6 @@ export function SettingsPage({
 									}
 									onInventoryAutoRefreshIntervalSecondsChange(parsed);
 								}}
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground disabled:opacity-60"
 							/>
 							<p className="text-xs text-muted-foreground">
 								Minimum 15 seconds.
@@ -472,7 +461,6 @@ export function SettingsPage({
 								value={eeLogPath}
 								onChange={(event) => onEeLogPathChange(event.target.value)}
 								placeholder="Path to EE.log"
-								className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 							/>
 						</div>
 						<div className="flex items-center gap-2">
@@ -552,7 +540,6 @@ export function SettingsPage({
 										onRelicTestImagePathChange(event.target.value)
 									}
 									placeholder="Path to reward screenshot image"
-									className="w-full px-3 py-2 font-mono text-sm border rounded-md shadow-xs h-9 border-Input bg-background text-foreground"
 								/>
 								<div className="flex items-center gap-2">
 									<Button

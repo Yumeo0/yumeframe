@@ -500,8 +500,8 @@ export function ArbitrationsPage({
 				</TabsList>
 
 				<TabsContent value="schedule" className="flex-1 min-h-0 overflow-y-auto">
-					<Card className="flex flex-col h-full min-h-0 gap-2 py-4">
-						<CardHeader className="pb-0">
+					<Card className="flex flex-col h-full min-h-0 gap-2 py-2">
+						<CardHeader className="pb-2">
 							<div className="flex items-center justify-between gap-2">
 								<CardTitle className="text-base">
 									Upcoming Arbitrations
@@ -580,68 +580,71 @@ export function ArbitrationsPage({
 									onWheel={onScheduleWheel}
 								>
 									<div
-										className={`flex min-w-max items-start gap-3 pb-2 ${
+										className={`flex min-w-max items-start gap-3 pb-2 select-none ${
 											isScheduleDragging ? "cursor-grabbing" : "cursor-grab"
 										}`}
 									>
-										{scheduleByDay.map((day) => (
-											<div
-												key={day.dayStartMs}
-												className="flex w-[320px] min-w-[320px] flex-col rounded-md border p-2"
-											>
-												<div className="flex items-center justify-between pb-2 mb-2 border-b">
-													<div>
-														<p className="text-sm font-semibold">
-															{day.dayLabel}
-														</p>
+										{scheduleByDay.map((day, index) => (
+											<div key={day.dayStartMs} className="flex items-start gap-3">
+												<div className="flex flex-col">
+													<div className="flex items-center justify-between mb-2">
+														<div>
+															<p className="text-sm font-semibold">
+																{day.dayLabel}
+															</p>
+														</div>
+														{day.isToday ? (
+															<Badge variant="outline">Today</Badge>
+														) : null}
 													</div>
-													{day.isToday ? (
-														<Badge variant="outline">Today</Badge>
-													) : null}
+
+													<div className="flex flex-col gap-1">
+														{day.entries.map((entry) => {
+															const missionMode =
+																modeByNodeCode[entry.nodeCode] ?? "Unknown";
+															const tier = resolveEntryTier(entry.nodeCode);
+															return (
+																<div
+																	key={`${entry.timestampSec}-${entry.nodeCode}`}
+																	className="flex items-center justify-between gap-2 rounded border px-2 py-1.5 w-64"
+																>
+																	<div className="min-w-0">
+																		<p className="text-sm font-medium truncate">
+																			{formatNodeLabel(entry.nodeCode)}
+																		</p>
+																		<p className="text-xs truncate text-muted-foreground">
+																			{formatDateTime(
+																				entry.timestampSec * 1000,
+																				use24HourClock,
+																			)}
+																		</p>
+																		<p className="text-xs truncate text-muted-foreground">
+																			{missionMode}
+																		</p>
+																	</div>
+																	<div className="flex flex-col items-end gap-1">
+																		<Badge
+																			variant="outline"
+																			className="text-muted-foreground bg-muted/30"
+																		>
+																			{formatCountdown(entry.timestampSec, nowMs)}
+																		</Badge>
+																		<Badge
+																			variant="outline"
+																			className={getTierBadgeClassName(tier)}
+																		>
+																			Tier {tier ?? "-"}
+																		</Badge>
+																	</div>
+																</div>
+															);
+														})}
+													</div>
 												</div>
 
-												<div className="pr-1 flex flex-col gap-1">
-													{day.entries.map((entry) => {
-														const missionMode =
-															modeByNodeCode[entry.nodeCode] ?? "Unknown";
-														const tier = resolveEntryTier(entry.nodeCode);
-														return (
-															<div
-																key={`${entry.timestampSec}-${entry.nodeCode}`}
-																className="flex items-center justify-between gap-2 rounded border px-2 py-1.5"
-															>
-																<div className="min-w-0">
-																	<p className="text-sm font-medium truncate">
-																		{formatNodeLabel(entry.nodeCode)}
-																	</p>
-																	<p className="text-xs truncate text-muted-foreground">
-																		{formatDateTime(
-																			entry.timestampSec * 1000,
-																			use24HourClock,
-																		)}
-																	</p>
-																	<p className="text-xs truncate text-muted-foreground">
-																		{missionMode}
-																	</p>
-																</div>
-																<div className="flex flex-col items-end gap-1">
-																	<Badge
-																		variant="outline"
-																		className="text-muted-foreground bg-muted/30"
-																	>
-																		{formatCountdown(entry.timestampSec, nowMs)}
-																	</Badge>
-																	<Badge
-																		variant="outline"
-																		className={getTierBadgeClassName(tier)}
-																	>
-																		Tier {tier ?? "-"}
-																	</Badge>
-																</div>
-															</div>
-														);
-													})}
-												</div>
+												{index < scheduleByDay.length - 1 && (
+													<div className="border-l" />
+												)}
 											</div>
 										))}
 									</div>
