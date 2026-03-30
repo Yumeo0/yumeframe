@@ -188,6 +188,10 @@ console.log("Running tauri build...");
 const buildResult = spawnSync("bun", ["run", "tauri", "build"], {
 	stdio: "inherit",
 	encoding: "utf8",
+	env: {
+		...process.env,
+		...(process.platform === "linux" ? { NO_STRIP: "1" } : {}),
+	},
 });
 if (buildResult.status !== 0) {
 	process.exit(buildResult.status ?? 1);
