@@ -205,19 +205,17 @@ function formatDayLabel(dayStartMs: number): string {
 function getTierBadgeClassName(tier: ArbitrationTier | null): string {
 	switch (tier) {
 		case "S":
-			return "border-emerald-300 bg-emerald-500/20 text-emerald-400";
-		case "A":
 			return "border-cyan-300 bg-cyan-500/20 text-cyan-400";
+		case "A":
+			return "border-emerald-300 bg-emerald-500/20 text-emerald-400";
 		case "B":
-			return "border-blue-300 bg-blue-500/20 text-blue-400";
+			return "border-amber-200 bg-amber-400/20 text-amber-300";
 		case "C":
-			return "border-amber-300 bg-amber-500/20 text-amber-400";
-		case "D":
 			return "border-orange-300 bg-orange-500/20 text-orange-400";
-		case "F":
-			return "border-rose-300 bg-rose-500/20 text-rose-400";
+		case "D":
+			return "border-orange-500 bg-orange-700/20 text-orange-600";
 		default:
-			return "border-border bg-muted/50 text-muted-foreground";
+			return "border-rose-300 bg-rose-500/20 text-rose-400";
 	}
 }
 
@@ -633,7 +631,7 @@ export function ArbitrationsPage({
 																			variant="outline"
 																			className={getTierBadgeClassName(tier)}
 																		>
-																			Tier {tier ?? "-"}
+																			Tier {tier ?? "F"}
 																		</Badge>
 																	</div>
 																</div>
