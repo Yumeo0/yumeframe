@@ -103,7 +103,63 @@ function formatDuration(seconds: number): string {
 function getGradientColor(percent: number): string {
 	const clamped = Math.max(0, Math.min(100, percent));
 	const hue = Math.max(0, 120 - (clamped / 18) * 120);
-	return `hsl(${hue} 100% 50%)`;
+	return `hsl(${hue}, 100%, 50%)`;
+}
+
+function standardNormalCdf(z: number): number {
+	const absZ = Math.abs(z);
+	const t = 1 / (1 + 0.2316419 * absZ);
+	const d = 0.3989423 * Math.exp((-absZ * absZ) / 2);
+	const polynomial =
+		t *
+		(0.3193815 +
+			t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+	const cdf = 1 - d * polynomial;
+	return z >= 0 ? cdf : 1 - cdf;
+}
+
+function getLuckLabel(zScore: number): string {
+	if (zScore >= 2.326) {
+		return "God Roll";
+	}
+	if (zScore >= 1.282) {
+		return "High Roll";
+	}
+	if (zScore >= 0.674) {
+		return "Above Avg";
+	}
+	if (zScore >= -0.674) {
+		return "Average";
+	}
+	if (zScore >= -1.282) {
+		return "Below Avg";
+	}
+	if (zScore >= -2.326) {
+		return "Unlucky";
+	}
+	return "Worst Case";
+}
+
+function getLuckColor(zScore: number): string {
+	if (zScore >= 2.326) {
+		return "#FFD700";
+	}
+	if (zScore >= 1.282) {
+		return "#00E676";
+	}
+	if (zScore >= 0.674) {
+		return "#B2FF59";
+	}
+	if (zScore >= -0.674) {
+		return "#FAFAFA";
+	}
+	if (zScore >= -1.282) {
+		return "#FFCC80";
+	}
+	if (zScore >= -2.326) {
+		return "#FF9100";
+	}
+	return "#FF5252";
 }
 
 export function ArbitrationAnalyzer({
@@ -141,7 +197,7 @@ export function ArbitrationAnalyzer({
 	}, [refreshAnalyzer]);
 
 	const derived = useMemo(() => {
-		if (!analyzer || !analyzer.sessionFound) {
+		if (!analyzer?.sessionFound) {
 			return null;
 		}
 
@@ -187,6 +243,21 @@ export function ArbitrationAnalyzer({
 			analyzer.durationSeconds > 0
 				? actualVitus / (analyzer.durationSeconds / 60)
 				: null;
+		const actualVitusLuck =
+			Number.isFinite(actualVitus) && actualVitus >= 0 && grandStd > 0
+				? (() => {
+					const zScore = (actualVitus - grandMean) / grandStd;
+					const percentile = standardNormalCdf(zScore) * 100;
+					const isBelowAverage = zScore < 0;
+					const tailPercent = isBelowAverage
+						? percentile
+						: Math.max(0, 100 - percentile);
+					return {
+						text: `${getLuckLabel(zScore)} (${isBelowAverage ? "Bottom" : "Top"} ${tailPercent.toFixed(1)}%)`,
+						color: getLuckColor(zScore),
+					};
+				})()
+				: null;
 
 		const liveCounts = analyzer.liveCounts ?? [];
 		const saturationBuckets = new Array(
@@ -230,7 +301,7 @@ export function ArbitrationAnalyzer({
 				return {
 					label,
 					percent,
-					fill: `hsl(${hue} 100% ${lightness}%)`,
+					fill: `hsl(${hue}, 100%, ${lightness}%)`,
 				};
 			},
 		);
@@ -281,7 +352,7 @@ export function ArbitrationAnalyzer({
 				dronesPerRotation.push({
 					rotation: rotation + 1,
 					count: droneCount,
-					fill: "hsl(0 100% 50%)",
+					fill: "hsl(0, 100%, 50%)",
 				});
 
 				const durationSeconds = Math.max(10, rewardTimestamp - rotationStart);
@@ -303,7 +374,7 @@ export function ArbitrationAnalyzer({
 			for (const point of dronesPerRotation) {
 				const normalized = (point.count - min) / range;
 				const hue = normalized * 120;
-				point.fill = `hsl(${hue} 100% 50%)`;
+				point.fill = `hsl(${hue}, 100%, 50%)`;
 			}
 		}
 
@@ -326,6 +397,7 @@ export function ArbitrationAnalyzer({
 			scenarios,
 			grandMean,
 			vitusPerMinute,
+			actualVitusLuck,
 			saturationData,
 			thresholdPercent,
 			dpmSeries,
@@ -471,6 +543,24 @@ export function ArbitrationAnalyzer({
 										<CardContent className="flex flex-1 min-h-0 overflow-hidden">
 											<ScrollArea className="flex-1 min-h-0">
 												<div className="flex flex-col gap-2 pr-1 text-sm">
+													<div className="p-2 border rounded bg-muted/30">
+														<p className="text-xs text-muted-foreground">
+															Actual Vitus Luck
+														</p>
+														{derived?.actualVitusLuck ? (
+															<p
+																className="text-sm font-medium"
+																style={{ color: derived.actualVitusLuck.color }}
+															>
+																{derived.actualVitusLuck.text}
+															</p>
+														) : (
+															<p className="text-xs text-muted-foreground">
+																Enter your actual Vitus above to evaluate luck.
+															</p>
+														)}
+													</div>
+													<SelectSeparator />
 													<div className="grid items-center grid-cols-3">
 														<span className="text-muted-foreground">
 															Chance
@@ -524,10 +614,11 @@ export function ArbitrationAnalyzer({
 														>
 															<CartesianGrid
 																strokeDasharray="3 3"
-																stroke="hsl(var(--muted-foreground) / 0.2)"
+																stroke="rgba(161, 161, 170, 0.2)"
 															/>
 															<XAxis
 																type="number"
+																domain={[0, "dataMax + 2"]}
 																tickFormatter={(value) => `${value}%`}
 																width={34}
 																tick={{ fontSize: 11 }}
@@ -556,7 +647,7 @@ export function ArbitrationAnalyzer({
 															<Bar
 																dataKey="percent"
 																radius={[0, 4, 4, 0]}
-																animationDuration={800}
+																isAnimationActive={false}
 															>
 																<LabelList
 																	dataKey="percent"
@@ -617,8 +708,10 @@ export function ArbitrationAnalyzer({
 															}}
 														>
 															<CartesianGrid
-																strokeDasharray="3 3"
-																stroke="hsl(var(--muted-foreground) / 0.2)"
+																horizontal
+																vertical={false}
+																strokeDasharray="3 5"
+																stroke="rgba(161, 161, 170, 0.6)"
 															/>
 															<XAxis
 																dataKey="rotation"

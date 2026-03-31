@@ -270,6 +270,7 @@ struct ArbitrationSessionAccumulator {
     mission_code: Option<String>,
     started_at_log_seconds: Option<f64>,
     ended_at_log_seconds: Option<f64>,
+    precise_start_time: Option<f64>,
     rounds_completed: u32,
     rewards_detected: u32,
     drone_spawns: u32,
@@ -282,6 +283,7 @@ struct ArbitrationSessionAccumulator {
     has_data: bool,
     last_activity_time: f64,
     last_reward_time: f64,
+    extraction_timestamp: Option<f64>,
     reward_timestamps: Vec<f64>,
     drone_timestamps: Vec<f64>,
     live_counts: Vec<LiveCountPoint>,
@@ -293,6 +295,7 @@ impl ArbitrationSessionAccumulator {
             mission_code: None,
             started_at_log_seconds: None,
             ended_at_log_seconds: None,
+            precise_start_time: None,
             rounds_completed: 0,
             rewards_detected: 0,
             drone_spawns: 0,
@@ -305,6 +308,7 @@ impl ArbitrationSessionAccumulator {
             has_data: false,
             last_activity_time: 0.0,
             last_reward_time: 0.0,
+            extraction_timestamp: None,
             reward_timestamps: Vec::new(),
             drone_timestamps: Vec::new(),
             live_counts: Vec::new(),
@@ -515,9 +519,6 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 let mut next = ArbitrationSessionAccumulator::new();
                 next.mission_code = Some(mission_name.replace("Arbitration:", "").trim().to_string());
                 next.started_at_log_seconds = log_time;
-                if let Some(timestamp) = log_time {
-                    next.last_activity_time = timestamp;
-                }
                 current = Some(next);
             }
 
@@ -530,7 +531,18 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
             }
 
             if let Some(timestamp) = log_time {
-                session.last_activity_time = session.last_activity_time.max(timestamp);
+                let is_defense_wave_one = lower.contains("wavedefend.lua: defense wave: 1");
+                let is_interception_start = lower.contains("territorymission.lua")
+                    && (lower.contains("control") || lower.contains("captured"));
+
+                if session.precise_start_time.is_none() && (is_defense_wave_one || is_interception_start)
+                {
+                    session.precise_start_time = Some(timestamp);
+                }
+
+                if lower.contains("wavedefend.lua: defense wave:") || is_interception_start {
+                    session.last_activity_time = session.last_activity_time.max(timestamp);
+                }
             }
 
             if lower.contains(REWARD_MARKER) {
@@ -541,6 +553,7 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                     session.reward_timestamps.push(timestamp);
                     session.has_data = true;
                     session.last_reward_time = timestamp;
+                    session.last_activity_time = session.last_activity_time.max(timestamp);
                     if session.started_at_log_seconds.is_none() {
                         session.started_at_log_seconds = Some(timestamp);
                     }
@@ -561,6 +574,7 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 session.has_data = true;
                 if let Some(timestamp) = log_time {
                     session.drone_timestamps.push(timestamp);
+                    session.last_activity_time = session.last_activity_time.max(timestamp);
                 }
             } else if lower.contains("arbitrationdrone") {
                 if lower.contains("spawn") || lower.contains("created") {
@@ -570,6 +584,7 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                     session.drone_kills = session.drone_kills.saturating_add(1);
                     if let Some(timestamp) = log_time {
                         session.drone_timestamps.push(timestamp);
+                        session.last_activity_time = session.last_activity_time.max(timestamp);
                     }
                 }
             }
@@ -600,6 +615,10 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
 
             if lower.contains("extract") {
                 session.extraction_detected = true;
+                if let Some(timestamp) = log_time {
+                    session.extraction_timestamp = Some(timestamp);
+                    session.last_activity_time = session.last_activity_time.max(timestamp);
+                }
             }
         }
     }
@@ -618,11 +637,32 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
         .or_else(|| sessions.last().cloned());
 
     if let Some(mut session) = chosen {
-        if session.ended_at_log_seconds.is_none() {
-            if session.last_activity_time > 0.0 {
-                session.ended_at_log_seconds = Some(session.last_activity_time);
-            }
-        }
+        let overlay_start = session.started_at_log_seconds;
+        let inferred_start = if session.precise_start_time.is_some() && !session.drone_timestamps.is_empty()
+        {
+            session.precise_start_time
+        } else {
+            session
+                .drone_timestamps
+                .first()
+                .copied()
+                .or_else(|| session.reward_timestamps.first().copied())
+                .or(overlay_start)
+        };
+
+        session.started_at_log_seconds = inferred_start;
+        session.ended_at_log_seconds = session
+            .extraction_timestamp
+            .or_else(|| session.reward_timestamps.last().copied())
+            .or_else(|| session.drone_timestamps.last().copied())
+            .or_else(|| {
+                if session.last_activity_time > 0.0 {
+                    Some(session.last_activity_time)
+                } else {
+                    None
+                }
+            });
+
         return session.into_stats(lines.len());
     }
 
