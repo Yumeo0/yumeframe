@@ -1,3 +1,4 @@
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Clipboard, FolderOpen, Loader2, Search } from "lucide-react";
 import type { SettingsSection } from "@/components/app/SettingsSidebar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -251,7 +252,9 @@ export function SettingsPage({
 								</Select>
 							</div>
 							<div className="flex flex-col gap-2">
-								<Label htmlFor="scanner-auto-debounce">Trigger debounce (ms)</Label>
+								<Label htmlFor="scanner-auto-debounce">
+									Trigger debounce (ms)
+								</Label>
 								<Input
 									id="scanner-auto-debounce"
 									type="number"
@@ -655,11 +658,11 @@ export function SettingsPage({
 									<Button
 										size="sm"
 										variant="outline"
-										onClick={() =>
-											navigator.clipboard.writeText(
+										onClick={async () => {
+											await writeText(
 												JSON.stringify(JSON.parse(inventory), null, 2),
-											)
-										}
+											);
+										}}
 										title="Copy to clipboard"
 									>
 										<Clipboard data-icon="inline-start" />

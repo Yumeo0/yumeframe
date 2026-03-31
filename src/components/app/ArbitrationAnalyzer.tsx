@@ -1,6 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Image as TauriImage } from "@tauri-apps/api/image";
+import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
+import html2canvas from "html2canvas-pro";
+import { Copy, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	Bar,
 	BarChart,
@@ -166,11 +169,14 @@ export function ArbitrationAnalyzer({
 	eeLogPath,
 	formatNodeLabel,
 }: ArbitrationAnalyzerProps) {
+	const analyzerContentRef = useRef<HTMLDivElement | null>(null);
 	const [analyzer, setAnalyzer] = useState<ArbitrationLiveStats | null>(null);
 	const [liveLoading, setLiveLoading] = useState(false);
 	const [liveError, setLiveError] = useState<string | null>(null);
 	const [actualVitusInput, setActualVitusInput] = useState<string>("");
 	const [actualDroneInput, setActualDroneInput] = useState<string>("");
+	const [copyLoading, setCopyLoading] = useState(false);
+	const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
 	const refreshAnalyzer = useCallback(async () => {
 		setLiveLoading(true);
@@ -195,6 +201,178 @@ export function ArbitrationAnalyzer({
 	useEffect(() => {
 		void refreshAnalyzer();
 	}, [refreshAnalyzer]);
+
+	const copyAnalyzerAsImage = useCallback(async () => {
+		if (!analyzerContentRef.current || copyLoading) {
+			return;
+		}
+
+		setCopyLoading(true);
+		setCopyMessage(null);
+		let cloned: HTMLDivElement | null = null;
+
+		try {
+			const source = analyzerContentRef.current;
+			const sourceRect = source.getBoundingClientRect();
+			const sourceCard = source.closest<HTMLElement>('[data-slot="card"]');
+			const sourceCardBackground = sourceCard
+				? getComputedStyle(sourceCard).backgroundColor
+				: "rgba(0, 0, 0, 0)";
+			const canvasBackground =
+				sourceCardBackground !== "rgba(0, 0, 0, 0)"
+					? sourceCardBackground
+					: "#09090b";
+			cloned = source.cloneNode(true) as HTMLDivElement;
+
+			cloned.style.position = "fixed";
+			cloned.style.left = "-100000px";
+			cloned.style.top = "0";
+			cloned.style.width = `${Math.ceil(sourceRect.width)}px`;
+			cloned.style.height = "auto";
+			cloned.style.maxHeight = "none";
+			cloned.style.minHeight = "0";
+			cloned.style.overflow = "visible";
+			cloned.style.pointerEvents = "none";
+			cloned.style.zIndex = "-1";
+			cloned.style.background = canvasBackground;
+
+			for (const slot of ["card", "card-header", "card-content"] as const) {
+				const sourceElements = source.querySelectorAll<HTMLElement>(
+					`[data-slot="${slot}"]`,
+				);
+				const clonedElements = cloned.querySelectorAll<HTMLElement>(
+					`[data-slot="${slot}"]`,
+				);
+
+				for (let index = 0; index < clonedElements.length; index++) {
+					const sourceElement = sourceElements[index];
+					const clonedElement = clonedElements[index];
+					if (!sourceElement || !clonedElement) {
+						continue;
+					}
+
+					const computed = getComputedStyle(sourceElement);
+					clonedElement.style.backgroundColor = computed.backgroundColor;
+					clonedElement.style.color = computed.color;
+					clonedElement.style.borderColor = computed.borderColor;
+					clonedElement.style.boxShadow = computed.boxShadow;
+				}
+			}
+
+			for (const element of cloned.querySelectorAll<HTMLElement>(
+				'[data-slot="scroll-area"], [data-slot="scroll-area-viewport"]',
+			)) {
+				element.style.height = "auto";
+				element.style.maxHeight = "none";
+				element.style.minHeight = "0";
+				element.style.overflow = "visible";
+			}
+
+			for (const scrollbarElement of cloned.querySelectorAll<HTMLElement>(
+				'[data-slot="scroll-area-scrollbar"], [data-slot="scroll-area-corner"]',
+			)) {
+				scrollbarElement.style.display = "none";
+			}
+
+			for (const input of cloned.querySelectorAll<
+				HTMLInputElement | HTMLTextAreaElement
+			>("input, textarea")) {
+				if (
+					input instanceof HTMLInputElement &&
+					["hidden", "checkbox", "radio", "button", "submit"].includes(
+						input.type,
+					)
+				) {
+					continue;
+				}
+
+				const value = input.value.trim();
+				const previousSibling = input.previousElementSibling as HTMLElement | null;
+				const nextSibling = input.nextElementSibling as HTMLElement | null;
+
+				if (!value) {
+					if (previousSibling?.getAttribute("data-slot") === "select-separator") {
+						previousSibling.remove();
+					}
+					if (nextSibling?.getAttribute("data-slot") === "select-separator") {
+						nextSibling.remove();
+					}
+					input.remove();
+					continue;
+				}
+
+				const placeholderLabel = input.placeholder?.trim();
+				const sourceLabel = placeholderLabel
+					? placeholderLabel.replace(/^enter\s+/i, "")
+					: (
+							input
+								.closest(".p-2.border.rounded")
+								?.querySelector("p")
+								?.textContent?.trim() ?? "Value"
+						);
+				const label = sourceLabel.replace(/\b\w/g, (char) =>
+					char.toUpperCase(),
+				);
+
+				const replacement = document.createElement("div");
+				replacement.textContent = `${label}: ${value}`;
+				replacement.style.display = "block";
+				replacement.style.width = "100%";
+				replacement.style.minHeight = "2rem";
+				replacement.style.padding = "0.35rem 0.5rem";
+				replacement.style.border = "1px solid rgba(161, 161, 170, 0.4)";
+				replacement.style.background = "rgba(24, 24, 27, 0.75)";
+				replacement.style.color = "#fafafa";
+				replacement.style.fontSize = "0.875rem";
+				replacement.style.fontWeight = "600";
+				replacement.style.lineHeight = "1.25rem";
+
+				input.replaceWith(replacement);
+			}
+
+			const cloneHost = source.parentElement ?? document.body;
+			cloneHost.appendChild(cloned);
+
+			const canvas = await html2canvas(cloned, {
+				backgroundColor: canvasBackground,
+				logging: false,
+				scale: Math.max(1, Math.min(window.devicePixelRatio || 1, 2)),
+				useCORS: true,
+				windowWidth: Math.ceil(cloned.scrollWidth),
+				windowHeight: Math.ceil(cloned.scrollHeight),
+			});
+
+			const context = canvas.getContext("2d", { willReadFrequently: true });
+			if (!context) {
+				throw new Error("Could not access canvas context.");
+			}
+
+			const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+			const rgba = Array.from(imageData.data);
+			const tauriImage = await TauriImage.new(
+				rgba,
+				canvas.width,
+				canvas.height,
+			);
+			await writeImage(tauriImage);
+			setCopyMessage("Analyzer image copied.");
+		} catch (error) {
+			const reason =
+				error instanceof Error
+					? error.message
+					: typeof error === "string"
+						? error
+						: JSON.stringify(error);
+			setCopyMessage(
+				`Copy failed: ${reason}`,
+			);
+		} finally {
+			if (cloned?.isConnected) {
+				cloned.remove();
+			}
+			setCopyLoading(false);
+		}
+	}, [copyLoading]);
 
 	const derived = useMemo(() => {
 		if (!analyzer?.sessionFound) {
@@ -246,17 +424,17 @@ export function ArbitrationAnalyzer({
 		const actualVitusLuck =
 			Number.isFinite(actualVitus) && actualVitus >= 0 && grandStd > 0
 				? (() => {
-					const zScore = (actualVitus - grandMean) / grandStd;
-					const percentile = standardNormalCdf(zScore) * 100;
-					const isBelowAverage = zScore < 0;
-					const tailPercent = isBelowAverage
-						? percentile
-						: Math.max(0, 100 - percentile);
-					return {
-						text: `${getLuckLabel(zScore)} (${isBelowAverage ? "Bottom" : "Top"} ${tailPercent.toFixed(1)}%)`,
-						color: getLuckColor(zScore),
-					};
-				})()
+						const zScore = (actualVitus - grandMean) / grandStd;
+						const percentile = standardNormalCdf(zScore) * 100;
+						const isBelowAverage = zScore < 0;
+						const tailPercent = isBelowAverage
+							? percentile
+							: Math.max(0, 100 - percentile);
+						return {
+							text: `${getLuckLabel(zScore)} (${isBelowAverage ? "Bottom" : "Top"} ${tailPercent.toFixed(1)}%)`,
+							color: getLuckColor(zScore),
+						};
+					})()
 				: null;
 
 		const liveCounts = analyzer.liveCounts ?? [];
@@ -416,23 +594,45 @@ export function ArbitrationAnalyzer({
 							<CardTitle className="text-base">
 								{formatNodeLabel(analyzer?.missionCode ?? "")}
 							</CardTitle>
+							{copyMessage ? (
+								<p className="mt-1 text-xs text-muted-foreground">
+									{copyMessage}
+								</p>
+							) : null}
 						</div>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => void refreshAnalyzer()}
-							disabled={liveLoading}
-						>
-							{liveLoading ? (
-								<RefreshCw data-icon="inline-start" className="animate-spin" />
-							) : (
-								<RefreshCw data-icon="inline-start" />
-							)}
-							Refresh
-						</Button>
+						<div className="flex items-center gap-2">
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => void copyAnalyzerAsImage()}
+								disabled={copyLoading}
+							>
+								<Copy data-icon="inline-start" />
+								{copyLoading ? "Copying..." : "Copy Image"}
+							</Button>
+							<Button
+								variant="outline"
+								size="sm"
+								onClick={() => void refreshAnalyzer()}
+								disabled={liveLoading}
+							>
+								{liveLoading ? (
+									<RefreshCw
+										data-icon="inline-start"
+										className="animate-spin"
+									/>
+								) : (
+									<RefreshCw data-icon="inline-start" />
+								)}
+								Refresh
+							</Button>
+						</div>
 					</div>
 				</CardHeader>
-				<CardContent className="flex flex-col flex-1 min-h-0 overflow-hidden">
+				<CardContent
+					ref={analyzerContentRef}
+					className="flex flex-col flex-1 min-h-0 overflow-hidden"
+				>
 					{liveError ? (
 						<p className="text-sm text-destructive">{liveError}</p>
 					) : !analyzer ? (
@@ -449,18 +649,18 @@ export function ArbitrationAnalyzer({
 							<div className="flex flex-col gap-3 pb-2 pr-1">
 								<div className="grid grid-cols-1 gap-2 md:grid-cols-3 max-h-72">
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											Total Enemies Spawned
 										</p>
-										<p className="text-sm font-medium">
+										<p className="text-lg font-semibold leading-tight">
 											{derived?.totalEnemies ?? 0}
 										</p>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											Kills / Drone
 										</p>
-										<p className="text-sm font-medium">
+										<p className="text-lg font-semibold leading-tight">
 											{derived?.killsPerDrone !== null &&
 											derived?.killsPerDrone !== undefined
 												? derived.killsPerDrone.toFixed(2)
@@ -468,18 +668,18 @@ export function ArbitrationAnalyzer({
 										</p>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											Avg Drone Interval
 										</p>
-										<p className="text-sm font-medium">
+										<p className="text-lg font-semibold leading-tight">
 											{analyzer.avgDroneIntervalSeconds !== null
 												? `${analyzer.avgDroneIntervalSeconds.toFixed(2)}s`
 												: "N/A"}
 										</p>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">Drone Kills</p>
-										<p className="text-sm font-medium">
+										<p className="text-sm text-muted-foreground">Drone Kills</p>
+										<p className="text-lg font-semibold leading-tight">
 											{derived?.effectiveDroneKills ?? analyzer.droneKills}
 										</p>
 										<SelectSeparator />
@@ -494,10 +694,10 @@ export function ArbitrationAnalyzer({
 										/>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											Vitus / Minute
 										</p>
-										<p className="text-sm font-medium">
+										<p className="text-lg font-semibold leading-tight">
 											{derived?.vitusPerMinute !== null &&
 											derived?.vitusPerMinute !== undefined
 												? `${derived.vitusPerMinute.toFixed(2)}/m`
@@ -515,13 +715,13 @@ export function ArbitrationAnalyzer({
 										/>
 									</div>
 									<div className="p-2 border rounded">
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											Total Duration
 										</p>
-										<p className="text-sm font-medium">
+										<p className="text-lg font-semibold leading-tight">
 											{formatDuration(analyzer.durationSeconds)}
 										</p>
-										<p className="text-xs text-muted-foreground">
+										<p className="text-sm text-muted-foreground">
 											{derived?.isDefense
 												? `Total Waves: ${analyzer.roundsCompleted * (derived?.wavesPerRotation ?? 3)}`
 												: `Total Rounds: ${analyzer.roundsCompleted}`}

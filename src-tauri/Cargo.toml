@@ -37,6 +37,7 @@ tokio = { version = "1", features = ["rt", "sync"] }
 directories = "6"
 tauri-plugin-http = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-clipboard-manager = "2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["memoryapi", "processthreadsapi", "handleapi", "winnt", "errhandlingapi"] }

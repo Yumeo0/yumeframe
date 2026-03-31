@@ -22,6 +22,8 @@
         }
       ]
     },
-    "dialog:default"
+    "dialog:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image"
   ]
 }

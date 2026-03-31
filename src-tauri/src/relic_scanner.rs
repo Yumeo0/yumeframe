@@ -233,9 +233,7 @@ fn get_ocr_model_paths(app_handle: &AppHandle) -> Result<(PathBuf, PathBuf, Path
         }
     }
 
-    Err(
-        "OCR models not found. Expected src-tauri/models with PP-OCRv5 model files".to_string(),
-    )
+    Err("OCR models not found. Expected src-tauri/models with PP-OCRv5 model files".to_string())
 }
 
 fn create_ocr_engine(app_handle: &AppHandle) -> Result<OcrEngine, String> {
@@ -318,7 +316,9 @@ fn cluster_ocr_results_by_slot(
     reward_area_width: u32,
 ) -> Vec<OcrSlotCluster> {
     results.retain(|result| {
-        !result.text.trim().is_empty() && result.bbox.rect.width() > 0 && result.bbox.rect.height() > 0
+        !result.text.trim().is_empty()
+            && result.bbox.rect.width() > 0
+            && result.bbox.rect.height() > 0
     });
     results.sort_by_key(ocr_result_center_x);
 
@@ -384,7 +384,10 @@ fn normalize_ocr_reward_name(text: &str) -> Option<String> {
 
 fn is_valid_reward_candidate(candidate: &str) -> bool {
     let compact_len = candidate.chars().filter(|ch| !ch.is_whitespace()).count();
-    let alpha_len = candidate.chars().filter(|ch| ch.is_ascii_alphabetic()).count();
+    let alpha_len = candidate
+        .chars()
+        .filter(|ch| ch.is_ascii_alphabetic())
+        .count();
     compact_len >= 6 && alpha_len >= 3
 }
 
@@ -566,9 +569,12 @@ fn process_reward_image(
         .join("\n");
     save_debug_text(&artifacts, "03_reward_area_ocr_results.txt", &ocr_dump)?;
 
-    let mut slot_clusters = cluster_ocr_results_by_slot(ocr_results, extraction.reward_area.width());
+    let mut slot_clusters =
+        cluster_ocr_results_by_slot(ocr_results, extraction.reward_area.width());
     for cluster in &mut slot_clusters {
-        cluster.items.sort_by_key(|item| (ocr_result_center_y(item), ocr_result_center_x(item)));
+        cluster
+            .items
+            .sort_by_key(|item| (ocr_result_center_y(item), ocr_result_center_x(item)));
     }
 
     let mut slot_candidates: Vec<Option<String>> = Vec::new();
@@ -590,8 +596,8 @@ fn process_reward_image(
         )?;
 
         slot_raw_text.push(raw_text.clone());
-        let normalized =
-            normalize_ocr_reward_name(&raw_text).filter(|candidate| is_valid_reward_candidate(candidate));
+        let normalized = normalize_ocr_reward_name(&raw_text)
+            .filter(|candidate| is_valid_reward_candidate(candidate));
         slot_candidates.push(normalized);
     }
 
@@ -612,7 +618,10 @@ fn process_reward_image(
         .collect();
 
     let mut rewards = Vec::new();
-    for candidate in slot_candidates.iter().filter_map(|candidate| candidate.as_ref()) {
+    for candidate in slot_candidates
+        .iter()
+        .filter_map(|candidate| candidate.as_ref())
+    {
         if !rewards.iter().any(|existing| existing == candidate) {
             rewards.push(candidate.clone());
         }
@@ -697,7 +706,16 @@ fn perform_scan(app: &AppHandle, source: &str, log_markers: Vec<String>) {
     }
 
     match capture_warframe_rewards(app, source, &log_markers) {
-        Ok(output) => emit_scan_result(app, source, Some(output), log_markers, None, None, None, None),
+        Ok(output) => emit_scan_result(
+            app,
+            source,
+            Some(output),
+            log_markers,
+            None,
+            None,
+            None,
+            None,
+        ),
         Err(err) => emit_scan_result(app, source, None, log_markers, None, None, None, Some(err)),
     }
 
@@ -870,12 +888,7 @@ fn spawn_scanner_worker(
             }
             let saw_reward_screen_shutdown = chunk.contains(RELIC_REWARD_SCREEN_SHUTDOWN_MARKER);
             if saw_reward_screen_shutdown {
-                process_pending_auto_scan(
-                    &app,
-                    &mut pending_auto_scan,
-                    &scanner_config,
-                    true,
-                );
+                process_pending_auto_scan(&app, &mut pending_auto_scan, &scanner_config, true);
                 auto_session_locked = false;
                 continue;
             }

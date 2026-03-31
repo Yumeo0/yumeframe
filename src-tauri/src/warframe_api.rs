@@ -1,8 +1,8 @@
 use read_process_memory::{copy_address, Pid, ProcessHandle};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
-use std::fs::File;
 use std::fs;
+use std::fs::File;
 #[cfg(target_os = "linux")]
 use std::io::{BufRead, BufReader};
 use std::io::{Read, Seek, SeekFrom};
@@ -11,7 +11,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use sysinfo::System;
 use tauri::{AppHandle, Manager};
-
 
 /// Pattern to search for: "?accountId="
 const ACCOUNT_ID_PATTERN: &[u8] = b"?accountId=";
@@ -29,7 +28,9 @@ fn detect_ee_log_paths_internal() -> Vec<String> {
     let mut paths = BTreeSet::new();
 
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let candidate = PathBuf::from(local_app_data).join("Warframe").join("EE.log");
+        let candidate = PathBuf::from(local_app_data)
+            .join("Warframe")
+            .join("EE.log");
         if let Some(path) = existing_file_path(candidate) {
             paths.insert(path);
         }
@@ -142,10 +143,7 @@ fn detect_ee_log_paths_internal() -> Vec<String> {
         }
 
         let home_windows_like_candidates = [
-            home_path
-                .join(".wine")
-                .join("drive_c")
-                .join("users"),
+            home_path.join(".wine").join("drive_c").join("users"),
             home_path.join("Games").join("drive_c").join("users"),
         ];
 
@@ -367,10 +365,7 @@ impl ArbitrationSessionAccumulator {
 }
 
 fn resolve_ee_log_path_from_input(ee_log_path: Option<String>) -> Option<String> {
-    let provided = ee_log_path
-        .unwrap_or_default()
-        .trim()
-        .to_string();
+    let provided = ee_log_path.unwrap_or_default().trim().to_string();
 
     if !provided.is_empty() && PathBuf::from(&provided).is_file() {
         return Some(provided);
@@ -504,7 +499,9 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 // Ignore log rewinds/overlaps similarly to the JS parser.
                 if let Some(timestamp) = log_time {
                     if let Some(existing) = current.as_ref() {
-                        if existing.last_activity_time > 0.0 && timestamp < existing.last_activity_time {
+                        if existing.last_activity_time > 0.0
+                            && timestamp < existing.last_activity_time
+                        {
                             continue;
                         }
                     }
@@ -517,7 +514,8 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 }
 
                 let mut next = ArbitrationSessionAccumulator::new();
-                next.mission_code = Some(mission_name.replace("Arbitration:", "").trim().to_string());
+                next.mission_code =
+                    Some(mission_name.replace("Arbitration:", "").trim().to_string());
                 next.started_at_log_seconds = log_time;
                 current = Some(next);
             }
@@ -535,7 +533,8 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 let is_interception_start = lower.contains("territorymission.lua")
                     && (lower.contains("control") || lower.contains("captured"));
 
-                if session.precise_start_time.is_none() && (is_defense_wave_one || is_interception_start)
+                if session.precise_start_time.is_none()
+                    && (is_defense_wave_one || is_interception_start)
                 {
                     session.precise_start_time = Some(timestamp);
                 }
@@ -593,8 +592,8 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
                 let is_excluded = EXCLUDED_AGENT_MARKERS
                     .iter()
                     .any(|marker| lower.contains(marker));
-                let is_drone_line =
-                    lower.contains("corpuseliteshielddroneagent") || lower.contains("arbitrationdrone");
+                let is_drone_line = lower.contains("corpuseliteshielddroneagent")
+                    || lower.contains("arbitrationdrone");
 
                 if !is_excluded && !is_drone_line {
                     session.enemy_spawns = session.enemy_spawns.saturating_add(1);
@@ -638,17 +637,17 @@ fn parse_latest_arbitration_stats(lines: &[&str]) -> ArbitrationLiveStats {
 
     if let Some(mut session) = chosen {
         let overlay_start = session.started_at_log_seconds;
-        let inferred_start = if session.precise_start_time.is_some() && !session.drone_timestamps.is_empty()
-        {
-            session.precise_start_time
-        } else {
-            session
-                .drone_timestamps
-                .first()
-                .copied()
-                .or_else(|| session.reward_timestamps.first().copied())
-                .or(overlay_start)
-        };
+        let inferred_start =
+            if session.precise_start_time.is_some() && !session.drone_timestamps.is_empty() {
+                session.precise_start_time
+            } else {
+                session
+                    .drone_timestamps
+                    .first()
+                    .copied()
+                    .or_else(|| session.reward_timestamps.first().copied())
+                    .or(overlay_start)
+            };
 
         session.started_at_log_seconds = inferred_start;
         session.ended_at_log_seconds = session
@@ -1011,10 +1010,7 @@ fn find_warframe_process() -> Option<u32> {
 /// Try to fetch inventory with a given authz string
 /// Returns Ok(json) on success, Err on failure
 fn try_fetch_inventory(authz: &str) -> Result<String, String> {
-    let url = format!(
-        "https://api.warframe.com/api/inventory.php{}",
-        authz
-    );
+    let url = format!("https://api.warframe.com/api/inventory.php{}", authz);
 
     println!("{} Downloading inventory... ", url);
 
@@ -1322,7 +1318,10 @@ async fn fetch_export_data(
 
 /// Fetch warframe data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_warframe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_warframe_data(
+    app: AppHandle,
+    assets: Vec<AssetEntry>,
+) -> Result<String, String> {
     fetch_export_data(app, assets, "ExportWarframes_en.json").await
 }
 
@@ -1340,13 +1339,19 @@ pub async fn fetch_recipe_data(app: AppHandle, assets: Vec<AssetEntry>) -> Resul
 
 /// Fetch resource data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_resource_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_resource_data(
+    app: AppHandle,
+    assets: Vec<AssetEntry>,
+) -> Result<String, String> {
     fetch_export_data(app, assets, "ExportResources_en.json").await
 }
 
 /// Fetch companion data - returns raw JSON for frontend parsing
 #[tauri::command]
-pub async fn fetch_companion_data(app: AppHandle, assets: Vec<AssetEntry>) -> Result<String, String> {
+pub async fn fetch_companion_data(
+    app: AppHandle,
+    assets: Vec<AssetEntry>,
+) -> Result<String, String> {
     fetch_export_data(app, assets, "ExportSentinels_en.json").await
 }
 

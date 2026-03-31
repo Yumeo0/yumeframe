@@ -17,6 +17,7 @@ fn restart_app(app: AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
@@ -26,7 +27,9 @@ pub fn run() {
             }
 
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                if let Some(overlay_window) = window.app_handle().get_webview_window("relic-overlay") {
+                if let Some(overlay_window) =
+                    window.app_handle().get_webview_window("relic-overlay")
+                {
                     if let Err(err) = overlay_window.close() {
                         eprintln!("Failed to close relic overlay window: {err}");
                     }

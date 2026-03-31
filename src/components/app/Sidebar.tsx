@@ -154,8 +154,8 @@ export function Sidebar({
 							aria-hidden="true"
 							className={`size-6 shrink-0 ${activeTab === "arbitrations" ? "bg-primary-foreground" : "bg-foreground"}`}
 							style={{
-								maskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
-								WebkitMaskImage: 'url("/icons/difficulty/icon_steel_path.svg")',
+								maskImage: 'url("/icons/icon_arbitration.svg")',
+								WebkitMaskImage: 'url("/icons/icon_arbitration.svg")',
 								maskRepeat: "no-repeat",
 								WebkitMaskRepeat: "no-repeat",
 								maskPosition: "center",
